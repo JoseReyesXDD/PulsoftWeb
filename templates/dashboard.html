@@ -11,52 +11,90 @@
             padding: 20px;
             background-color: #f4f4f4;
             color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
         }
-        .container {
-            max-width: 800px;
-            margin: 50px auto;
+        .dashboard-container {
             background-color: #fff;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
         }
-        h1 {
+        h2 {
             color: #0056b3;
             margin-bottom: 20px;
-            text-align: center;
-        }
-        p {
-            line-height: 1.6;
-            margin-bottom: 20px;
-            text-align: center;
         }
         .user-info {
-            background-color: #e9ecef;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 30px;
-            text-align: center;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            color: #555;
         }
-        .logout-button {
+        .user-info strong {
+            color: #000;
+        }
+        .patient-info {
+            background-color: #e6f7ff;
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid #91d5ff;
+            margin-bottom: 20px;
+            color: #004085;
+            font-weight: bold;
+        }
+        .token-info {
+            background-color: #fff3cd;
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid #ffeeba;
+            margin-bottom: 20px;
+            color: #856404;
+            font-weight: bold;
+            font-size: 0.9em;
+            word-break: break-word;
+        }
+        canvas {
             display: block;
-            width: 150px;
-            margin: 30px auto 0;
-            padding: 10px 20px;
-            background-color: #dc3545;
+            background-color: #eee;
+            border-radius: 8px;
+            margin: 20px auto;
+            width: 100%;
+            max-width: 700px;
+            height: auto;
+        }
+        .links-container {
+            margin-top: 20px;
+        }
+        .links-container a {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 15px;
+            background-color: #007bff;
             color: white;
-            text-align: center;
-            border-radius: 5px;
+            border: none;
+            border-radius: 44px;
             text-decoration: none;
-            transition: background-color 0.3s ease;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .logout-button:hover {
-            background-color: #c82333;
+        .links-container a:hover {
+            background-color: #0056b3;
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
         }
-        /* Estilos para alertas (mensajes de Django) */
         .messages {
             list-style: none;
             padding: 0;
             margin-bottom: 20px;
+            width: 100%;
+            max-width: 800px;
+            text-align: left;
         }
         .messages li {
             padding: 10px 15px;
@@ -87,35 +125,91 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-                {% endfor %}
-            </ul>
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <div class="dashboard-container">
+        <h2>Dashboard de Usuario</h2>
+        <p class="user-info">Bienvenido, <strong>{{ user.email }}</strong> (Rol: {{ user.get_user_type_display }}).</p>
+
+        {% if user.is_patient %}
+            {% if caregiver_link_token %}
+                <div class="token-info">
+                    Tu Token de Enlace para Cuidadores: <strong>{{ caregiver_link_token }}</strong>
+                    <br>Comparte este código con tus cuidadores para que puedan vincularse.
+                </div>
+            {% else %}
+                <div class="token-info warning">
+                    Tu token de enlace no está disponible. Por favor, contacta al soporte.
+                </div>
+            {% endif %}
         {% endif %}
 
-        <h1>Bienvenido a tu Dashboard</h1>
-        <div class="user-info">
-            {% if user.is_authenticated %}
-                <p>Hola, {{ user.username }} ({{ user.email }}).</p>
-                <p>¡Aquí puedes gestionar tus notas y diagnósticos!</p>
+        {% if user.is_caregiver %}
+            {% if selected_patient_email %}
+                <div class="patient-info">
+                    Estás viendo los datos del paciente: <strong>{{ selected_patient_email }}</strong>
+                </div>
             {% else %}
-                <p>No estás autenticado. Por favor, <a href="{% url 'login_html' %}">inicia sesión</a>.</p>
+                <div class="patient-info">
+                    No has seleccionado un paciente.
+                </div>
             {% endif %}
+            <div class="links-container">
+                <a href="{% url 'patient_selection_html' %}">Cambiar Paciente</a>
+            </div>
+        {% endif %}
+
+        <h3>Datos de Sensores (Gráfica de Ejemplo)</h3>
+        <canvas id="myChart"></canvas>
+
+        <div class="links-container">
+            <a href="{% url 'logout_html' %}">Cerrar Sesión</a>
+            <a href="{% url 'home' %}">Volver a Inicio</a>
         </div>
-
-        {# Aquí puedes añadir formularios para análisis de notas, historial, etc. #}
-        <h2>Funcionalidades:</h2>
-        <ul>
-            <li><a href="#">Analizar nueva nota clínica</a> (requiere implementación del formulario)</li>
-            <li><a href="#">Ver historial de análisis</a> (requiere implementación de la vista)</li>
-            <li><a href="#">Configuración de cuenta</a> (cambiar contraseña/email)</li>
-        </ul>
-
-
-        <a href="{% url 'logout_html' %}" class="logout-button">Cerrar Sesión</a>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const labels = JSON.parse('{{ labels|escapejs }}');
+        const data = JSON.parse('{{ data|escapejs }}');
+
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Valores de Sensores',
+                    data: data,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 206, 86, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

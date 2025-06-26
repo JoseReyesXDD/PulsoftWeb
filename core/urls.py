@@ -1,7 +1,7 @@
 # pulsoft/urls.py
 from django.contrib import admin
 from django.urls import path, include
-from api import views # Importa solo las vistas HTML aquí, o refactoriza las API views a otro archivo si quieres
+from api import views 
 
 urlpatterns = [
     path('admin/', admin.site.urls),

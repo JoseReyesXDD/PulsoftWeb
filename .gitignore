@@ -1,65 +1,46 @@
-# Ignorar archivos específicos de Django/Python
 *.log
 *.pot
 *.pyc
 __pycache__/
 db.sqlite3
+node_modules/
 .env
 .venv/
 env/
 venv/
-virtual_pulsoft/
+virtual_pulsfot/
 media/
 static_root/
 staticfiles/
-
 virtualenv_pulsfot/
 fine_tuned_distilgpt2_model/
 venv/
 env/
 .venv/
-
-# Archivos sensibles y modelos grandes
 firebase_key.json
 fine_tuned_distilgpt2_model/
-# Archivos de Django y Python
 *.log
 *.pot
 *.pyc
 __pycache__/
-    db.sqlite3
+db.sqlite3
 media/
 static_root/
 staticfiles/
-
-    # Archivos de sistema operativo
 .DS_Store
 Thumbs.db
-
-# Archivos de IDEs
 .idea/             # PyCharm
 .vscode/           # VS Code
 *.sublime-project
 *.sublime-workspace
-
-# Otros archivos temporales o no versionables (revisa los tuyos)
 cd
 ngrok
 npm
 logs/
-# Archivos de sistema operativo
 .DS_Store
 Thumbs.db
-
-# Archivos de IDEs (si usas alguno)
 .idea/             # PyCharm
 .vscode/           # VS Code
 *.sublime-project
 *.sublime-workspace
-
-# Archivos de configuración sensibles (si los creas en el futuro)
-# Ejemplo:
-# core/settings_local.py # Si usas un archivo de settings local con secretos
-
-# Archivos generados por paquetes (ej. HuggingFace models)
 fine_tuned_distilgpt2_model/ # Ignorar la carpeta completa del modelo si es grande y no quieres subirla
