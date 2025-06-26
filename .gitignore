@@ -19,6 +19,7 @@ venv/
 env/
 .venv/
 
+
 # Archivos sensibles y modelos grandes
 firebase_key.json
 fine_tuned_distilgpt2_model/
@@ -31,6 +32,7 @@ __pycache__/
 media/
 static_root/
 staticfiles/
+node_modules
 
     # Archivos de sistema operativo
 .DS_Store
