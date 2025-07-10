@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head><title>Seleccionar Paciente</title></head>
+<body>
+    <h1>Selecciona un paciente</h1>
+    <form method="POST">{% csrf_token %}
+        <select name="selected_patient">
+            {% for link in linked_patients %}
+                <option value="{{ link.patient.uid }}">{{ link.patient.email }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Ver Datos</button>
+    </form>
+</body>
+</html>

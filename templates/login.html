@@ -1,142 +1,70 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .login-container {
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-        h2 {
-            color: #0056b3;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"], /* AuthenticationForm usa 'username' (tipo text) */
-        input[type="password"] {
-            width: calc(100% - 22px);
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .register-link {
-            display: block;
-            text-align: center;
-            margin-top: 20px;
-            color: #007bff;
-            text-decoration: none;
-        }
-        .register-link:hover {
-            text-decoration: underline;
-        }
-        /* Estilos para alertas (mensajes de Django) */
-        .messages {
-            list-style: none;
-            padding: 0;
-            margin-bottom: 20px;
-        }
-        .messages li {
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .messages .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .messages .error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .messages .warning {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeeba;
-        }
-        .messages .info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-    </style>
+    <title>Login Firebase</title>
 </head>
 <body>
-    <div class="login-container">
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+    <h1>Iniciar Sesión</h1>
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    <input type="email" id="email" placeholder="Correo"><br>
+    <input type="password" id="password" placeholder="Contraseña"><br>
+    <button onclick="login()">Entrar</button>
+    <form id="tokenForm" method="POST">{% csrf_token %}
+        <input type="hidden" name="id_token" id="id_token">
+    </form>
 
-        <h2>Iniciar Sesión</h2>
-        <form method="post">
-            {% csrf_token %} {# ¡Importante para la seguridad de Django! #}
-            {% for field in form %}
-                <div class="form-group">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
-                    {{ field }}
-                    {% if field.help_text %}
-                        <small class="form-text text-muted">{{ field.help_text }}</small>
-                    {% endif %}
-                    {% for error in field.errors %}
-                        <p style="color: red; font-size: 0.9em;">{{ error }}</p>
-                    {% endfor %}
-                </div>
-            {% endfor %}
-            {% if form.non_field_errors %}
-                {% for error in form.non_field_errors %}
-                    <p style="color: red; font-size: 0.9em;">{{ error }}</p>
-                {% endfor %}
-            {% endif %}
-            <button type="submit">Iniciar Sesión</button>
-        </form>
-        <a href="{% url 'register_html' %}" class="register-link">¿No tienes cuenta? Regístrate</a>
-        <a href="{% url 'home' %}" class="register-link">Volver a Inicio</a>
-    </div>
+    <script type="module">
+        // IMPORTANTE: Se deben importar las funciones específicas de Firebase.
+        // Estas URLs son para la versión 9.22.1 que estás usando.
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+        // Si usas Analytics, también debes importarlo:
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js";
+
+        // Tu configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDQEWZhaViw-7LT-VLs4XdCXcFg25DmrqQ",
+            authDomain: "pulsoft-fc676.firebaseapp.com",
+            databaseURL: "https://pulsoft-fc676-default-rtdb.firebaseio.com",
+            projectId: "pulsoft-fc676",
+            storageBucket: "pulsoft-fc676.firebasestorage.app",
+            messagingSenderId: "758196176997",
+            appId: "1:758196176997:web:f8f023b9c03fca2e489e8c",
+            measurementId: "G-K6XJ908EXP"
+        };
+
+        // Inicializa Firebase App
+        const app = initializeApp(firebaseConfig);
+        // Obtiene la instancia de Auth (autenticación)
+        const auth = getAuth(app);
+        // Inicializa Analytics (si lo necesitas)
+        const analytics = getAnalytics(app);
+
+        // Define la función login y la hace global para que el botón onclick pueda llamarla.
+        // Es una función asíncrona porque las operaciones de Firebase son promesas.
+        window.login = async function() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                // Llama a signInWithEmailAndPassword usando la instancia 'auth'
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                // Obtiene el ID Token del usuario
+                const token = await userCredential.user.getIdToken();
+                
+                // Asigna el token al campo oculto del formulario
+                document.getElementById('id_token').value = token;
+                // Envía el formulario a tu vista de Django
+                document.getElementById('tokenForm').submit();
+            } catch (error) {
+                // Muestra un mensaje de error al usuario.
+                // Es mejor mostrar error.message para dar más detalles.
+                alert("Error de inicio de sesión: " + error.message);
+                console.error(error); // Imprime el error completo en la consola para depuración
+            }
+        };
+    </script>
 </body>
 </html>

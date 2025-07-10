@@ -1,5 +1,10 @@
+# settings.py
+
 import os
 from pathlib import Path
+import firebase_admin
+from firebase_admin import credentials
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,16 +27,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib',
     'rest_framework',
     'corsheaders',
-    'api',  
+    'api',
     'core',
 ]
 
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -39,14 +44,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True 
+
 
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')], 
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -66,11 +72,14 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'pulsoft_db',
+        'USER': 'postgres',
+        'PASSWORD': 'Alonso21',  
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -113,7 +122,72 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+# Configuración de Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication', 
+        'rest_framework.authentication.BasicAuthentication', 
+                ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny', 
+    ],
+    'DEFAULT_RENDERER_CLASSES': [ 
+        'rest_framework.renderers.JSONRenderer',
+    ],
+}
+
+# Configuración de Logging para tu aplicación 'api'
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'api': { # <-- Nombre de tu aplicación Django
+            'handlers': ['console'],
+            'level': 'DEBUG', # Cambia a INFO o WARNING en producción
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO', # Mantén INFO para mensajes generales de Django
+            'propagate': False,
+        },
+    },
+}
+FIREBASE_CREDENTIALS_PATH = os.path.join(BASE_DIR, 'firebase_key.json') 
+
+if not firebase_admin._apps: 
+    try:
+        cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': 'https://pulsoft-fc676-default-rtdb.firebaseio.com/' # Asegúrate de que esta URL es correcta si usas Realtime DB
+        })
+        print("Firebase Admin SDK inicializado exitosamente.")
+    except FileNotFoundError:
+        print(f"Error: Archivo de credenciales de Firebase no encontrado en: {FIREBASE_CREDENTIALS_PATH}")
+    except Exception as e:
+        print(f"Error al inicializar Firebase Admin SDK: {e}")
+
+
 AUTHENTICATION_BACKENDS = [
-    'api.views.FirebaseBackend',  # <-- Asegúrate de que esta línea esté presente
-    'django.contrib.auth.backends.ModelBackend', # Mantén esto si necesitas el autenticador de DB de Django (ej. para el admin)
+    'api.backends.FirebaseBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
+
+LOGIN_URL = '/login/'
