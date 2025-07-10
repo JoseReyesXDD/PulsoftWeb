@@ -5,5 +5,14 @@
     <h1>Dashboard de Cuidador</h1>
     <p>Paciente seleccionado: {{ patient.email }}</p>
     <a href="{% url 'logout' %}">Cerrar sesión</a>
+    <h1>Dashboard del Cuidador</h1>
+<p>Visualizando datos del paciente: {{ patient.email }}</p>
+
+<a href="{% url 'caregiver_notes' %}">
+    <button>Ver notas del paciente</button>
+</a>
+
+<a href="{% url 'logout' %}">Cerrar sesión</a>
+
 </body>
 </html>

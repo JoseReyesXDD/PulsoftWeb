@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>Mis Notas</title></head>
+<body>
+    <h1>Mis Notas</h1>
+    {% for note in notes %}
+        <div>
+            <p><strong>Contenido:</strong> {{ note.content }}</p>
+            <p><em>Fecha:</em> {{ note.createdAt }}</p>
+        </div>
+        <hr>
+    {% empty %}
+        <p>No hay notas registradas aún.</p>
+    {% endfor %}
+    <a href="{% url 'logout' %}">Cerrar sesión</a>
+</body>
+</html>

@@ -5,6 +5,7 @@ from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore # Importa Firestore
 from api.models import FirebaseUser, CaregiverPatientLink
 import firebase_admin
+from firebase_config import db
 
 def login_view(request):
     if request.method == 'POST':
@@ -100,17 +101,21 @@ def logout_view(request):
 
 def select_patient(request):
     uid = request.session.get('uid')
-    user_type = request.session.get('user_type') # Obtén user_type de la sesión
+    user_type = request.session.get('user_type')
 
-    if not uid or user_type != 'caregiver': # Verifica también el user_type
+    if not uid or user_type != 'caregiver':
         return redirect('login')
     
     try:
-        caregiver = FirebaseUser.objects.get(uid=uid)
-        links = CaregiverPatientLink.objects.filter(caregiver=caregiver).select_related('patient')
-    except FirebaseUser.DoesNotExist:
-        print(f"Error: Cuidador con UID {uid} no encontrado en FirebaseUser (en select_patient).")
-        return redirect('login') # Redirigir si el perfil del cuidador no existe
+        # --- Obtener todos los documentos en Firestore donde el cuidador sea el actual ---
+        query = db.collection('caregiverPatientLinks').where('caregiverUid', '==', uid).stream()
+        patient_uids = [doc.to_dict().get('patientUid') for doc in query]
+
+        # --- Buscar en PostgreSQL los datos de cada paciente por su UID ---
+        linked_patients = FirebaseUser.objects.filter(uid__in=patient_uids)
+    except Exception as e:
+        print(f"ERROR: No se pudo recuperar pacientes desde Firestore o PostgreSQL: {e}")
+        linked_patients = []
 
     if request.method == 'POST':
         selected_patient_uid = request.POST.get('selected_patient')
@@ -118,9 +123,12 @@ def select_patient(request):
             request.session['selected_patient_uid'] = selected_patient_uid
             return redirect('caregiver_dashboard')
         else:
-            return render(request, 'select_patient.html', {'linked_patients': links, 'error': 'Por favor, selecciona un paciente.'})
+            return render(request, 'select_patient.html', {
+                'linked_patients': linked_patients,
+                'error': 'Por favor, selecciona un paciente.'
+            })
 
-    return render(request, 'select_patient.html', {'linked_patients': links})
+    return render(request, 'select_patient.html', {'linked_patients': linked_patients})
 
 def caregiver_dashboard(request):
     uid = request.session.get('uid')
@@ -152,3 +160,41 @@ def patient_dashboard(request):
         return redirect('login') # Redirigir si el perfil del paciente no existe
     
     return render(request, 'patient_dashboard.html', {'patient': patient})
+
+def patient_notes_view(request):
+    uid = request.session.get('uid')
+    user_type = request.session.get('user_type')
+
+    if not uid or user_type != 'patient':
+        return redirect('login')
+
+    # Consultar notas desde Firestore
+    notes_ref = db.collection('users').document(uid).collection('notes')
+    notes = [doc.to_dict() for doc in notes_ref.stream()]
+
+    return render(request, 'patient_notes.html', {'notes': notes})
+
+def caregiver_notes_view(request):
+    uid = request.session.get('uid')
+    user_type = request.session.get('user_type')
+    patient_uid = request.session.get('selected_patient_uid')
+
+    if not uid or user_type != 'caregiver' or not patient_uid:
+        return redirect('login')
+
+    # Obtener email del paciente desde Django (si está sincronizado)
+    try:
+        patient = FirebaseUser.objects.get(uid=patient_uid)
+        patient_email = patient.email
+    except FirebaseUser.DoesNotExist:
+        patient_email = "Desconocido"
+
+    # Consultar notas desde Firestore
+    notes_ref = db.collection('users').document(patient_uid).collection('notes')
+    notes = [doc.to_dict() for doc in notes_ref.stream()]
+
+    return render(request, 'caregiver_notes.html', {
+        'notes': notes,
+        'patient_uid': patient_uid,
+        'patient_email': patient_email
+    })

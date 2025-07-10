@@ -5,5 +5,14 @@
     <h1>Dashboard del Paciente</h1>
     <p>Bienvenido {{ patient.email }}</p>
     <a href="{% url 'logout' %}">Cerrar sesión</a>
+
+    <h1>Dashboard del Paciente</h1>
+<p>Bienvenido {{ patient.email }}</p>
+
+<a href="{% url 'patient_notes' %}">
+    <button>Ver mis notas</button>
+</a>
+
+<a href="{% url 'logout' %}">Cerrar sesión</a>
 </body>
 </html>
