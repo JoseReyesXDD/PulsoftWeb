@@ -2,6 +2,7 @@
 <html>
 <head><title>Cuidador</title></head>
 <body>
+
     <h1>Dashboard de Cuidador</h1>
     <p>Paciente seleccionado: {{ patient.email }}</p>
     <a href="{% url 'logout' %}">Cerrar sesión</a>
@@ -9,7 +10,7 @@
 <p>Visualizando datos del paciente: {{ patient.email }}</p>
 
 <a href="{% url 'caregiver_notes' %}">
-    <button>Ver notas del paciente</button>
+    <button>Ver analisis del paciente</button>
 </a>
 
 <a href="{% url 'logout' %}">Cerrar sesión</a>

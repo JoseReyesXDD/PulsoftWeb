@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
+from api.decorators import firebase_login_required
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore # Importa Firestore
 from api.models import FirebaseUser, CaregiverPatientLink
@@ -94,7 +94,7 @@ def login_view(request):
 
     return render(request, 'login.html')
 
-@login_required
+@firebase_login_required
 def logout_view(request):
     logout(request)
     return redirect('login')

@@ -2,15 +2,15 @@
 <html>
 <head><title>Notas del Paciente</title></head>
 <body>
-    <h1>Notas de {{ patient_email }}</h1>
+    <h1>Analisis de {{ patient_email }}</h1>
     {% for note in notes %}
         <div>
-            <p><strong>Contenido:</strong> {{ note.content }}</p>
-            <p><em>Fecha:</em> {{ note.createdAt }}</p>
+            <p><strong>Analisis:</strong> {{ note.analisis_IA }}</p>
+            <p><em>Fecha:</em> {{ note.analizadoEn }}</p>
         </div>
         <hr>
     {% empty %}
-        <p>Este paciente aún no ha registrado notas.</p>
+        <p>Este paciente aún no ha registrado notas para su analisis.</p>
     {% endfor %}
     <a href="{% url 'logout' %}">Cerrar sesión</a>
 </body>

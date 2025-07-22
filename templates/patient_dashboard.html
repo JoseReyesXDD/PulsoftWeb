@@ -2,6 +2,8 @@
 <html>
 <head><title>Paciente</title></head>
 <body>
+    <a href="{% url 'configuracion_usuario' %}">Configuración</a>
+
     <h1>Dashboard del Paciente</h1>
     <p>Bienvenido {{ patient.email }}</p>
     <a href="{% url 'logout' %}">Cerrar sesión</a>
