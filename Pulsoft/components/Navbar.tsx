@@ -1,4 +1,4 @@
-import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from './ui/IconSymbol';
 import { ThemedText } from './ThemedText';
@@ -19,13 +19,9 @@ export function Navbar() {
       </View>
       
       <View style={styles.rightSection}>
-        <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconButton}>
-          <IconSymbol name="bell.fill" size={22} color="#111" />
-          <Text style={styles.iconLabel}>Notificaciones</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={() => window.location.href = '/login/'} style={styles.iconButton}>
           <IconSymbol name="person.fill" size={22} color="#111" />
-          <Text style={styles.iconLabel}>Perfil</Text>
+          <ThemedText style={styles.iconLabel}>Perfil</ThemedText>
         </TouchableOpacity>
       </View>
     </View>
@@ -58,7 +54,7 @@ const styles = StyleSheet.create({
   },
   logoText: {
     fontSize: 20,
-    fontFamily: 'Gabarito',
+    fontFamily: 'Lufga-Bold',
   },
   iconButton: {
     padding: 4,
@@ -68,6 +64,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111',
     marginTop: 2,
-    fontFamily: 'Lufga',
+    fontFamily: 'Lufga-Regular',
   },
 }); 

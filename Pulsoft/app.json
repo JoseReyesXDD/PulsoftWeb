@@ -37,6 +37,80 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "fonts": [
+      {
+        "asset": "./assets/fonts/lufga/LufgaThin.ttf",
+        "family": "Lufga-Thin"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaThinItalic.ttf",
+        "family": "Lufga-ThinItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaExtraLight.ttf",
+        "family": "Lufga-ExtraLight"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaExtraLightItalic.ttf",
+        "family": "Lufga-ExtraLightItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaLight.ttf",
+        "family": "Lufga-Light"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaLightItalic.ttf",
+        "family": "Lufga-LightItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaRegular.ttf",
+        "family": "Lufga-Regular"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaItalic.ttf",
+        "family": "Lufga-Italic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaMedium.ttf",
+        "family": "Lufga-Medium"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaMediumItalic.ttf",
+        "family": "Lufga-MediumItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaSemiBold.ttf",
+        "family": "Lufga-SemiBold"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaSemiBoldItalic.ttf",
+        "family": "Lufga-SemiBoldItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaBold.ttf",
+        "family": "Lufga-Bold"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaBoldItalic.ttf",
+        "family": "Lufga-BoldItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaExtraBold.ttf",
+        "family": "Lufga-ExtraBold"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaExtraBoldItalic.ttf",
+        "family": "Lufga-ExtraBoldItalic"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaBlack.ttf",
+        "family": "Lufga-Black"
+      },
+      {
+        "asset": "./assets/fonts/lufga/LufgaBlackItalic.ttf",
+        "family": "Lufga-BlackItalic"
+      }
+    ]
   }
 }
