@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getAuth, signOut } from 'firebase/auth';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getAuth, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getDatabase, ref, onValue, off, connectDatabaseEmulator } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -21,71 +21,105 @@ export default function PatientDashboardScreen() {
   const [patientData, setPatientData] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [authStatus, setAuthStatus] = useState<string>('checking');
+  const [dbStatus, setDbStatus] = useState<string>('disconnected');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const router = useRouter();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Cargar datos reales del paciente desde Firebase
-    const loadPatientData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const db = getDatabase(firebaseApp);
-          const patientId = user.uid; // Usar el UID del usuario actual
-          const patientRef = ref(db, `patients/${patientId}`);
-          
-          // Escuchar cambios en tiempo real
-          const unsubscribe = onValue(patientRef, (snapshot) => {
-            const data = snapshot.val();
-            setIsConnected(true);
-                         if (data) {
-               setPatientData({
-                 email: user.email || 'paciente@ejemplo.com',
-                 uid: user.uid,
-                 cardiovascular: data.cardiovascular || 0,
-                 sudor: data.sudor || 0,
-                 temperatura: data.temperatura || 0,
-                 lastUpdate: new Date().toLocaleTimeString()
-               });
-             } else {
-               // Si no hay datos, usar valores por defecto
-               setPatientData({
-                 email: user.email || 'paciente@ejemplo.com',
-                 uid: user.uid,
-                 cardiovascular: 0,
-                 sudor: 0,
-                 temperatura: 0,
-                 lastUpdate: new Date().toLocaleTimeString()
-               });
-             }
-            setLoading(false);
-                     }, (error) => {
-             console.error('Error loading patient data:', error);
-             setIsConnected(false);
-             // En caso de error, usar valores por defecto
-             setPatientData({
-               email: user.email || 'paciente@ejemplo.com',
-               uid: user.uid,
-               cardiovascular: 0,
-               sudor: 0,
-               temperatura: 0
-             });
-             setLoading(false);
-           });
-
-          // Limpiar la suscripción cuando el componente se desmonte
-          return () => unsubscribe();
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Error loading patient data:', error);
+    // Verificar estado de autenticación
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ Usuario autenticado:', user.uid, user.email);
+        setAuthStatus('authenticated');
+        loadPatientData(user);
+      } else {
+        console.log('❌ No hay usuario autenticado');
+        setAuthStatus('unauthenticated');
         setLoading(false);
+        setErrorMessage('No hay usuario autenticado');
       }
-    };
+    });
 
-    loadPatientData();
+    return () => {
+      unsubscribeAuth();
+    };
   }, []);
+
+  const loadPatientData = async (user: any) => {
+    try {
+      console.log('🔄 Iniciando carga de datos del paciente...');
+      setDbStatus('connecting');
+      
+      const db = getDatabase(firebaseApp);
+      const patientId = user.uid;
+      const patientRef = ref(db, `patients/${patientId}`);
+      
+      console.log('📍 Ruta de la base de datos:', `patients/${patientId}`);
+      
+      // Escuchar cambios en tiempo real
+      const unsubscribe = onValue(patientRef, (snapshot) => {
+        console.log('📡 Datos recibidos de Firebase:', snapshot.val());
+        setIsConnected(true);
+        setDbStatus('connected');
+        
+        const data = snapshot.val();
+        if (data) {
+          console.log('✅ Datos encontrados:', data);
+          setPatientData({
+            email: user.email || 'paciente@ejemplo.com',
+            uid: user.uid,
+            cardiovascular: data.cardiovascular || 0,
+            sudor: data.sudor || 0,
+            temperatura: data.temperatura || 0,
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+          setErrorMessage('');
+        } else {
+          console.log('⚠️ No hay datos en la ruta especificada');
+          // Si no hay datos, usar valores por defecto
+          setPatientData({
+            email: user.email || 'paciente@ejemplo.com',
+            uid: user.uid,
+            cardiovascular: 0,
+            sudor: 0,
+            temperatura: 0,
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+          setErrorMessage('No se encontraron datos biométricos. Verifica que los sensores estén conectados.');
+        }
+        setLoading(false);
+      }, (error) => {
+        console.error('❌ Error cargando datos del paciente:', error);
+        setIsConnected(false);
+        setDbStatus('error');
+        setErrorMessage(`Error de conexión: ${error.message}`);
+        
+        // En caso de error, usar valores por defecto
+        setPatientData({
+          email: user.email || 'paciente@ejemplo.com',
+          uid: user.uid,
+          cardiovascular: 0,
+          sudor: 0,
+          temperatura: 0
+        });
+        setLoading(false);
+      });
+
+      // Limpiar la suscripción cuando el componente se desmonte
+      return () => {
+        console.log('🧹 Limpiando suscripción de Firebase');
+        off(patientRef);
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('❌ Error en loadPatientData:', error);
+      setDbStatus('error');
+      setErrorMessage(`Error inesperado: ${error}`);
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -104,10 +138,23 @@ export default function PatientDashboardScreen() {
     router.push('/configuracion-usuario');
   };
 
+  const handleRefresh = () => {
+    setLoading(true);
+    setErrorMessage('');
+    const user = auth.currentUser;
+    if (user) {
+      loadPatientData(user);
+    }
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Cargando...</ThemedText>
+        <MaterialCommunityIcons name="loading" size={48} color="#0A7EA4" />
+        <ThemedText style={styles.loadingText}>Cargando datos del paciente...</ThemedText>
+        <ThemedText style={styles.statusText}>
+          Auth: {authStatus} | DB: {dbStatus}
+        </ThemedText>
       </ThemedView>
     );
   }
@@ -125,16 +172,16 @@ export default function PatientDashboardScreen() {
             <ThemedText style={styles.subtitle}>
               Bienvenido {patientData?.email}
             </ThemedText>
-                         {patientData?.lastUpdate && (
-               <ThemedText style={styles.updateText}>
-                 Última actualización: {patientData.lastUpdate}
-               </ThemedText>
-             )}
-             {patientData?.uid && (
-               <ThemedText style={styles.uidText}>
-                 ID: {patientData.uid}
-               </ThemedText>
-             )}
+            {patientData?.lastUpdate && (
+              <ThemedText style={styles.updateText}>
+                Última actualización: {patientData.lastUpdate}
+              </ThemedText>
+            )}
+            {patientData?.uid && (
+              <ThemedText style={styles.uidText}>
+                ID: {patientData.uid}
+              </ThemedText>
+            )}
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -145,11 +192,22 @@ export default function PatientDashboardScreen() {
               color="white" 
             />
           </View>
+          <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+            <MaterialCommunityIcons name="refresh" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
             <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Status Messages */}
+      {errorMessage && (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={20} color="#FF6B6B" />
+          <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>
+        </View>
+      )}
 
       <ScrollView style={styles.content}>
         {/* Métricas rápidas */}
@@ -201,6 +259,18 @@ export default function PatientDashboardScreen() {
             <ThemedText style={styles.statusText}>Estable</ThemedText>
           </View>
         </View>
+
+        {/* Debug Info */}
+        <View style={styles.debugContainer}>
+          <ThemedText type="title" style={styles.debugTitle}>
+            Información de Debug
+          </ThemedText>
+          <View style={styles.debugCard}>
+            <ThemedText style={styles.debugText}>Auth Status: {authStatus}</ThemedText>
+            <ThemedText style={styles.debugText}>DB Status: {dbStatus}</ThemedText>
+            <ThemedText style={styles.debugText}>Connected: {isConnected ? 'Yes' : 'No'}</ThemedText>
+          </View>
+        </View>
       </ScrollView>
 
       {/* Footer con logout */}
@@ -222,6 +292,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+    color: '#666',
+  },
+  statusText: {
+    fontSize: 12,
+    marginTop: 8,
+    color: '#999',
   },
   header: {
     flexDirection: 'row',
@@ -253,6 +333,9 @@ const styles = StyleSheet.create({
   settingsButton: {
     padding: 8,
   },
+  refreshButton: {
+    padding: 8,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,6 +358,22 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 2,
     fontFamily: 'monospace',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#D32F2F',
+    marginLeft: 8,
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -367,6 +466,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4CAF50',
     marginLeft: 8,
+  },
+  debugContainer: {
+    marginBottom: 20,
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#666',
+  },
+  debugCard: {
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    fontFamily: 'monospace',
   },
   footer: {
     padding: 20,
