@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'rea
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth, signOut } from 'firebase/auth';
+import { getDatabase, ref, onValue, get } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -24,35 +25,56 @@ export default function CaregiverDashboardScreen() {
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Simular carga de pacientes vinculados
+    // Cargar pacientes vinculados desde Firebase
     const loadLinkedPatients = async () => {
       try {
-        // Aquí cargarías los pacientes reales desde Firebase
-        const mockPatients: PatientData[] = [
-          {
-            uid: '1',
-            email: 'paciente1@ejemplo.com',
-            cardiovascular: 75,
-            sudor: 45,
-            temperatura: 37.2,
-            lastUpdate: new Date().toLocaleString()
-          },
-          {
-            uid: '2',
-            email: 'paciente2@ejemplo.com',
-            cardiovascular: 82,
-            sudor: 38,
-            temperatura: 36.8,
-            lastUpdate: new Date().toLocaleString()
-          }
-        ];
+        const user = auth.currentUser;
+        if (!user) {
+          console.error('No hay usuario autenticado');
+          setLoading(false);
+          return;
+        }
+
+        const db = getDatabase(firebaseApp);
         
-        setLinkedPatients(mockPatients);
-        if (mockPatients.length > 0) {
-          setSelectedPatient(mockPatients[0]);
+        // Obtener la lista de pacientes vinculados al cuidador
+        const caregiverRef = ref(db, `caregivers/${user.uid}/linkedPatients`);
+        const caregiverSnapshot = await get(caregiverRef);
+        
+        if (caregiverSnapshot.exists()) {
+          const linkedPatientIds = caregiverSnapshot.val();
+          const patients: PatientData[] = [];
+          
+          // Obtener datos de cada paciente vinculado
+          for (const patientId in linkedPatientIds) {
+            const patientRef = ref(db, `patients/${patientId}`);
+            const patientSnapshot = await get(patientRef);
+            
+            if (patientSnapshot.exists()) {
+              const patientData = patientSnapshot.val();
+              patients.push({
+                uid: patientId,
+                email: patientData.email || `paciente-${patientId}@ejemplo.com`,
+                cardiovascular: patientData.cardiovascular || 0,
+                sudor: patientData.sudor || 0,
+                temperatura: patientData.temperatura || 0,
+                lastUpdate: patientData.lastUpdate || new Date().toLocaleString()
+              });
+            }
+          }
+          
+          setLinkedPatients(patients);
+          if (patients.length > 0) {
+            setSelectedPatient(patients[0]);
+          }
+        } else {
+          // Si no hay pacientes vinculados, mostrar mensaje
+          console.log('No se encontraron pacientes vinculados');
+          setLinkedPatients([]);
         }
       } catch (error) {
         console.error('Error loading linked patients:', error);
+        Alert.alert('Error', 'No se pudieron cargar los pacientes vinculados');
       } finally {
         setLoading(false);
       }

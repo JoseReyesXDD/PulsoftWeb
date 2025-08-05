@@ -3,6 +3,7 @@ import { View, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl }
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth, signOut } from 'firebase/auth';
+import { getDatabase, ref, onValue, get } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -33,44 +34,56 @@ export default function CaregiverNotesScreen() {
     try {
       const patientId = params.patientId as string;
       
-      // Simular carga de análisis desde Firebase
-      const mockAnalyses: PatientAnalysis[] = [
-        {
-          id: '1',
-          analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca ligeramente elevada (85 bpm) que puede indicar estrés o actividad física reciente. Se recomienda monitorear durante las próximas horas.',
-          analizadoEn: '2024-01-15 14:30',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'medium',
-          category: 'cardiovascular'
-        },
-        {
-          id: '2',
-          analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación o reducción del estrés.',
-          analizadoEn: '2024-01-14 10:15',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'sudor'
-        },
-        {
-          id: '3',
-          analisis_IA: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.1°C, dentro del rango normal. No se detectan signos de fiebre o hipotermia.',
-          analizadoEn: '2024-01-13 16:45',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'temperatura'
-        },
-        {
-          id: '4',
-          analisis_IA: 'Análisis general: El paciente muestra patrones saludables en todos los biomarcadores. Se recomienda mantener la rutina actual y continuar con el monitoreo regular.',
-          analizadoEn: '2024-01-12 09:20',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'general'
-        }
-      ];
+      if (!patientId) {
+        console.error('No se proporcionó ID del paciente');
+        Alert.alert('Error', 'No se pudo identificar al paciente');
+        setLoading(false);
+        return;
+      }
+
+      const db = getDatabase(firebaseApp);
       
-      setAnalyses(mockAnalyses);
-      setPatientEmail(mockAnalyses[0]?.patient_email || 'Paciente');
+      // Obtener datos del paciente para el email
+      const patientRef = ref(db, `patients/${patientId}`);
+      const patientSnapshot = await get(patientRef);
+      
+      if (patientSnapshot.exists()) {
+        const patientData = patientSnapshot.val();
+        setPatientEmail(patientData.email || `paciente-${patientId}@ejemplo.com`);
+      } else {
+        setPatientEmail(`paciente-${patientId}@ejemplo.com`);
+      }
+      
+      // Obtener análisis del paciente desde Firebase
+      const analysesRef = ref(db, `patients/${patientId}/analyses`);
+      const analysesSnapshot = await get(analysesRef);
+      
+      if (analysesSnapshot.exists()) {
+        const analysesData = analysesSnapshot.val();
+        const analyses: PatientAnalysis[] = [];
+        
+        // Convertir los datos de Firebase a nuestro formato
+        for (const analysisId in analysesData) {
+          const analysis = analysesData[analysisId];
+          analyses.push({
+            id: analysisId,
+            analisis_IA: analysis.analisis_IA || 'Análisis no disponible',
+            analizadoEn: analysis.analizadoEn || new Date().toISOString(),
+            patient_email: patientData?.email || `paciente-${patientId}@ejemplo.com`,
+            severity: analysis.severity || 'low',
+            category: analysis.category || 'general'
+          });
+        }
+        
+        // Ordenar por fecha de análisis (más reciente primero)
+        analyses.sort((a, b) => new Date(b.analizadoEn).getTime() - new Date(a.analizadoEn).getTime());
+        
+        setAnalyses(analyses);
+      } else {
+        // Si no hay análisis, mostrar lista vacía
+        console.log('No se encontraron análisis para este paciente');
+        setAnalyses([]);
+      }
     } catch (error) {
       console.error('Error loading patient analyses:', error);
       Alert.alert('Error', 'No se pudieron cargar los análisis');
