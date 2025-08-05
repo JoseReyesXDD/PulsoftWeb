@@ -150,3 +150,154 @@ class CaregiverPatientsView(APIView):
             return Response({
                 'error': 'Error interno del servidor al obtener los pacientes.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SearchPatientsView(APIView):
+    def get(self, request, *args, **kwargs):
+        """
+        Busca pacientes disponibles que un cuidador puede vincular.
+        """
+        try:
+            caregiver_uid = request.GET.get('caregiver_uid')
+            search_query = request.GET.get('search', '').strip()
+            
+            if not caregiver_uid:
+                return Response({
+                    'error': 'El parámetro caregiver_uid es requerido'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                caregiver = FirebaseUser.objects.get(uid=caregiver_uid, user_type='caregiver')
+            except FirebaseUser.DoesNotExist:
+                return Response({
+                    'error': 'Cuidador no encontrado'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Obtener IDs de pacientes ya vinculados
+            linked_patient_ids = CaregiverPatientLink.objects.filter(
+                caregiver=caregiver
+            ).values_list('patient__uid', flat=True)
+
+            # Buscar pacientes no vinculados
+            patients_query = FirebaseUser.objects.filter(user_type='patient').exclude(
+                uid__in=linked_patient_ids
+            )
+
+            # Aplicar filtro de búsqueda si se proporciona
+            if search_query:
+                patients_query = patients_query.filter(email__icontains=search_query)
+
+            # Limitar resultados a 20
+            patients = patients_query[:20]
+            
+            patients_data = []
+            for patient in patients:
+                patient_data = {
+                    'uid': patient.uid,
+                    'email': patient.email
+                }
+                patients_data.append(patient_data)
+
+            logger.info(f"SearchPatientsView: Se encontraron {len(patients_data)} pacientes disponibles")
+            return Response({'patients': patients_data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"SearchPatientsView: Error inesperado. Detalles: {e}", exc_info=True)
+            return Response({
+                'error': 'Error interno del servidor al buscar pacientes.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LinkPatientView(APIView):
+    def post(self, request, *args, **kwargs):
+        """
+        Vincula un paciente a un cuidador.
+        """
+        try:
+            caregiver_uid = request.data.get('caregiver_uid')
+            patient_uid = request.data.get('patient_uid')
+            
+            if not all([caregiver_uid, patient_uid]):
+                return Response({
+                    'error': 'Los parámetros caregiver_uid y patient_uid son requeridos'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                caregiver = FirebaseUser.objects.get(uid=caregiver_uid, user_type='caregiver')
+                patient = FirebaseUser.objects.get(uid=patient_uid, user_type='patient')
+            except FirebaseUser.DoesNotExist:
+                return Response({
+                    'error': 'Cuidador o paciente no encontrado'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Verificar si ya existe la vinculación
+            if CaregiverPatientLink.objects.filter(caregiver=caregiver, patient=patient).exists():
+                return Response({
+                    'error': 'El paciente ya está vinculado a este cuidador'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Crear la vinculación
+            link = CaregiverPatientLink.objects.create(
+                caregiver=caregiver,
+                patient=patient
+            )
+
+            logger.info(f"LinkPatientView: Paciente {patient.email} vinculado al cuidador {caregiver.email}")
+            return Response({
+                'message': 'Paciente vinculado exitosamente',
+                'link': {
+                    'patient_uid': patient.uid,
+                    'patient_email': patient.email,
+                    'linked_at': link.linked_at.isoformat()
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"LinkPatientView: Error inesperado. Detalles: {e}", exc_info=True)
+            return Response({
+                'error': 'Error interno del servidor al vincular el paciente.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UnlinkPatientView(APIView):
+    def post(self, request, *args, **kwargs):
+        """
+        Desvincula un paciente de un cuidador.
+        """
+        try:
+            caregiver_uid = request.data.get('caregiver_uid')
+            patient_uid = request.data.get('patient_uid')
+            
+            if not all([caregiver_uid, patient_uid]):
+                return Response({
+                    'error': 'Los parámetros caregiver_uid y patient_uid son requeridos'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                caregiver = FirebaseUser.objects.get(uid=caregiver_uid, user_type='caregiver')
+                patient = FirebaseUser.objects.get(uid=patient_uid, user_type='patient')
+            except FirebaseUser.DoesNotExist:
+                return Response({
+                    'error': 'Cuidador o paciente no encontrado'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Buscar y eliminar la vinculación
+            try:
+                link = CaregiverPatientLink.objects.get(caregiver=caregiver, patient=patient)
+                link.delete()
+                
+                logger.info(f"UnlinkPatientView: Paciente {patient.email} desvinculado del cuidador {caregiver.email}")
+                return Response({
+                    'message': 'Paciente desvinculado exitosamente'
+                }, status=status.HTTP_200_OK)
+                
+            except CaregiverPatientLink.DoesNotExist:
+                return Response({
+                    'error': 'No existe vinculación entre este cuidador y paciente'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            logger.error(f"UnlinkPatientView: Error inesperado. Detalles: {e}", exc_info=True)
+            return Response({
+                'error': 'Error interno del servidor al desvincular el paciente.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
