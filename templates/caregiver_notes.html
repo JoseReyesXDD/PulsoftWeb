@@ -1,17 +1,115 @@
 <!DOCTYPE html>
 <html>
-<head><title>Notas del Paciente</title></head>
+<head>
+    <title>Notas del Paciente - Cuidador</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .patient-info {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .note-card {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .note-date {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .note-analysis {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+            margin-top: 10px;
+        }
+        .no-notes {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            padding: 40px;
+        }
+        .back-button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .logout-button {
+            background-color: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .button-container {
+            margin-top: 30px;
+            text-align: center;
+        }
+    </style>
+</head>
 <body>
-    <h1>Analisis de {{ patient_email }}</h1>
-    {% for note in notes %}
-        <div>
-            <p><strong>Analisis:</strong> {{ note.analisis_IA }}</p>
-            <p><em>Fecha:</em> {{ note.analizadoEn }}</p>
+    <div class="container">
+        <h1>📋 Análisis de Notas del Paciente</h1>
+        
+        <div class="patient-info">
+            <h3>👤 Información del Paciente</h3>
+            <p><strong>Email:</strong> {{ patient_email }}</p>
+            <p><strong>ID del Paciente:</strong> {{ patient_uid }}</p>
         </div>
-        <hr>
-    {% empty %}
-        <p>Este paciente aún no ha registrado notas para su analisis.</p>
-    {% endfor %}
-    <a href="{% url 'logout' %}">Cerrar sesión</a>
+
+        {% if notes %}
+            <h2>📝 Notas Registradas ({{ notes|length }})</h2>
+            {% for note in notes %}
+                <div class="note-card">
+                    <div class="note-date">
+                        <strong>📅 Fecha de Análisis:</strong> {{ note.analizadoEn|default:"Fecha no disponible" }}
+                    </div>
+                    <div class="note-analysis">
+                        <strong>🔍 Análisis de IA:</strong><br>
+                        {{ note.analisis_IA|default:"Análisis no disponible" }}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-notes">
+                <h3>📭 No hay notas disponibles</h3>
+                <p>Este paciente aún no ha registrado notas para su análisis.</p>
+            </div>
+        {% endif %}
+
+        <div class="button-container">
+            <a href="{% url 'caregiver_dashboard' %}" class="back-button">← Volver al Dashboard</a>
+            <a href="{% url 'logout' %}" class="logout-button">🚪 Cerrar Sesión</a>
+        </div>
+    </div>
 </body>
 </html>
