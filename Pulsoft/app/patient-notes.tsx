@@ -27,35 +27,18 @@ export default function PatientNotesScreen() {
 
   const loadNotes = async () => {
     try {
-      // Simular carga de notas desde Firebase
-      const mockNotes: Note[] = [
-        {
-          id: '1',
-          content: 'Análisis de ritmo cardíaco: Se observa una frecuencia cardíaca estable dentro del rango normal. No se detectan anomalías significativas.',
-          createdAt: '2024-01-15 14:30',
-          type: 'analysis'
-        },
-        {
-          id: '2',
-          content: 'Recomendación: Mantener actividad física moderada y seguir una dieta equilibrada. Realizar ejercicio cardiovascular 3 veces por semana.',
-          createdAt: '2024-01-14 10:15',
-          type: 'recommendation'
-        },
-        {
-          id: '3',
-          content: 'Observación: Los niveles de sudoración han disminuido ligeramente. Esto puede indicar una mejor hidratación o cambios en la actividad física.',
-          createdAt: '2024-01-13 16:45',
-          type: 'observation'
-        },
-        {
-          id: '4',
-          content: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.2°C, lo cual es normal. No se detectan signos de fiebre.',
-          createdAt: '2024-01-12 09:20',
-          type: 'analysis'
+      const user = auth.currentUser;
+      if (user) {
+        const response = await fetch(`http://127.0.0.1:8000/api/patient-notes/?patient_uid=${user.uid}&requester_uid=${user.uid}&requester_type=patient`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setNotes(data.notes);
+        } else {
+          console.error('Error fetching notes:', response.statusText);
+          Alert.alert('Error', 'No se pudieron cargar las notas');
         }
-      ];
-      
-      setNotes(mockNotes);
+      }
     } catch (error) {
       console.error('Error loading notes:', error);
       Alert.alert('Error', 'No se pudieron cargar las notas');

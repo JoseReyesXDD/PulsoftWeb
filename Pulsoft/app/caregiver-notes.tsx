@@ -7,17 +7,15 @@ import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
-interface PatientAnalysis {
+interface Note {
   id: string;
-  analisis_IA: string;
-  analizadoEn: string;
-  patient_email: string;
-  severity: 'low' | 'medium' | 'high';
-  category: 'cardiovascular' | 'sudor' | 'temperatura' | 'general';
+  content: string;
+  createdAt: string;
+  type: 'analysis' | 'recommendation' | 'observation';
 }
 
 export default function CaregiverNotesScreen() {
-  const [analyses, setAnalyses] = useState<PatientAnalysis[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patientEmail, setPatientEmail] = useState('');
@@ -26,54 +24,30 @@ export default function CaregiverNotesScreen() {
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    loadPatientAnalyses();
+    loadPatientNotes();
   }, []);
 
-  const loadPatientAnalyses = async () => {
+  const loadPatientNotes = async () => {
     try {
       const patientId = params.patientId as string;
+      const user = auth.currentUser;
       
-      // Simular carga de análisis desde Firebase
-      const mockAnalyses: PatientAnalysis[] = [
-        {
-          id: '1',
-          analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca ligeramente elevada (85 bpm) que puede indicar estrés o actividad física reciente. Se recomienda monitorear durante las próximas horas.',
-          analizadoEn: '2024-01-15 14:30',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'medium',
-          category: 'cardiovascular'
-        },
-        {
-          id: '2',
-          analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación o reducción del estrés.',
-          analizadoEn: '2024-01-14 10:15',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'sudor'
-        },
-        {
-          id: '3',
-          analisis_IA: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.1°C, dentro del rango normal. No se detectan signos de fiebre o hipotermia.',
-          analizadoEn: '2024-01-13 16:45',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'temperatura'
-        },
-        {
-          id: '4',
-          analisis_IA: 'Análisis general: El paciente muestra patrones saludables en todos los biomarcadores. Se recomienda mantener la rutina actual y continuar con el monitoreo regular.',
-          analizadoEn: '2024-01-12 09:20',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'general'
+      if (user && patientId) {
+        const response = await fetch(`http://127.0.0.1:8000/api/patient-notes/?patient_uid=${patientId}&requester_uid=${user.uid}&requester_type=caregiver`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setNotes(data.notes);
+          // Set a mock patient email or fetch it from another endpoint
+          setPatientEmail('paciente@ejemplo.com');
+        } else {
+          console.error('Error fetching patient notes:', response.statusText);
+          Alert.alert('Error', 'No se pudieron cargar las notas del paciente');
         }
-      ];
-      
-      setAnalyses(mockAnalyses);
-      setPatientEmail(mockAnalyses[0]?.patient_email || 'Paciente');
+      }
     } catch (error) {
-      console.error('Error loading patient analyses:', error);
-      Alert.alert('Error', 'No se pudieron cargar los análisis');
+      console.error('Error loading patient notes:', error);
+      Alert.alert('Error', 'No se pudieron cargar las notas del paciente');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,7 +56,7 @@ export default function CaregiverNotesScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadPatientAnalyses();
+    loadPatientNotes();
   };
 
   const handleLogout = async () => {
@@ -94,44 +68,42 @@ export default function CaregiverNotesScreen() {
     }
   };
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return { name: 'alert-circle', color: '#FF6B6B' };
-      case 'medium':
-        return { name: 'alert', color: '#FFA726' };
-      case 'low':
-        return { name: 'check-circle', color: '#4CAF50' };
+  const getSeverityIcon = (noteType: string) => {
+    switch (noteType) {
+      case 'analysis':
+        return { name: 'chart-line', color: '#4CAF50' };
+      case 'recommendation':
+        return { name: 'lightbulb', color: '#FF9800' };
+      case 'observation':
+        return { name: 'eye', color: '#2196F3' };
       default:
-        return { name: 'information', color: '#2196F3' };
+        return { name: 'note-text', color: '#666' };
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'cardiovascular':
-        return { name: 'heart-pulse', color: '#FF6B6B' };
-      case 'sudor':
-        return { name: 'water', color: '#4BC0C0' };
-      case 'temperatura':
-        return { name: 'thermometer', color: '#FFCD56' };
-      case 'general':
-        return { name: 'chart-line', color: '#2196F3' };
+  const getCategoryIcon = (noteType: string) => {
+    switch (noteType) {
+      case 'analysis':
+        return { name: 'chart-line', color: '#4CAF50' };
+      case 'recommendation':
+        return { name: 'lightbulb', color: '#FF9800' };
+      case 'observation':
+        return { name: 'eye', color: '#2196F3' };
       default:
-        return { name: 'chart-line', color: '#666' };
+        return { name: 'note-text', color: '#666' };
     }
   };
 
-  const getSeverityLabel = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return 'Alto';
-      case 'medium':
-        return 'Medio';
-      case 'low':
-        return 'Bajo';
+  const getSeverityLabel = (noteType: string) => {
+    switch (noteType) {
+      case 'analysis':
+        return 'Análisis';
+      case 'recommendation':
+        return 'Recomendación';
+      case 'observation':
+        return 'Observación';
       default:
-        return 'Normal';
+        return 'Nota';
     }
   };
 
@@ -169,13 +141,13 @@ export default function CaregiverNotesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {analyses.length > 0 ? (
+        {notes.length > 0 ? (
           <View style={styles.analysesContainer}>
-            {analyses.map((analysis) => {
-              const severityIcon = getSeverityIcon(analysis.severity);
-              const categoryIcon = getCategoryIcon(analysis.category);
+            {notes.map((note) => {
+              const severityIcon = getSeverityIcon(note.type);
+              const categoryIcon = getCategoryIcon(note.type);
               return (
-                <View key={analysis.id} style={styles.analysisCard}>
+                <View key={note.id} style={styles.analysisCard}>
                   <View style={styles.analysisHeader}>
                     <View style={styles.analysisTypeContainer}>
                       <MaterialCommunityIcons 
@@ -184,7 +156,7 @@ export default function CaregiverNotesScreen() {
                         color={categoryIcon.color} 
                       />
                       <ThemedText style={[styles.analysisType, { color: categoryIcon.color }]}>
-                        {analysis.category.charAt(0).toUpperCase() + analysis.category.slice(1)}
+                        {note.type.charAt(0).toUpperCase() + note.type.slice(1)}
                       </ThemedText>
                     </View>
                     <View style={styles.severityContainer}>
@@ -194,20 +166,20 @@ export default function CaregiverNotesScreen() {
                         color={severityIcon.color} 
                       />
                       <ThemedText style={[styles.severityLabel, { color: severityIcon.color }]}>
-                        {getSeverityLabel(analysis.severity)}
+                        {getSeverityLabel(note.type)}
                       </ThemedText>
                     </View>
                   </View>
                   
                   <View style={styles.analysisContent}>
                     <ThemedText style={styles.analysisText}>
-                      {analysis.analisis_IA}
+                      {note.content}
                     </ThemedText>
                   </View>
                   
                   <View style={styles.analysisFooter}>
                     <ThemedText style={styles.analysisDate}>
-                      {new Date(analysis.analizadoEn).toLocaleDateString('es-ES', {
+                      {new Date(note.createdAt).toLocaleDateString('es-ES', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',

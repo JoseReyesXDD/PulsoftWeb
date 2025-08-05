@@ -14,52 +14,92 @@ interface PatientData {
   sudor: number;
   temperatura: number;
   lastUpdate: string;
+  linked_at?: string;
+}
+
+interface Note {
+  id: string;
+  content: string;
+  createdAt: string;
+  type: 'analysis' | 'recommendation' | 'observation';
 }
 
 export default function CaregiverDashboardScreen() {
   const [selectedPatient, setSelectedPatient] = useState<PatientData | null>(null);
   const [linkedPatients, setLinkedPatients] = useState<PatientData[]>([]);
+  const [patientNotes, setPatientNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notesLoading, setNotesLoading] = useState(false);
   const router = useRouter();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Simular carga de pacientes vinculados
-    const loadLinkedPatients = async () => {
-      try {
-        // Aquí cargarías los pacientes reales desde Firebase
-        const mockPatients: PatientData[] = [
-          {
-            uid: '1',
-            email: 'paciente1@ejemplo.com',
-            cardiovascular: 75,
-            sudor: 45,
-            temperatura: 37.2,
-            lastUpdate: new Date().toLocaleString()
-          },
-          {
-            uid: '2',
-            email: 'paciente2@ejemplo.com',
-            cardiovascular: 82,
-            sudor: 38,
-            temperatura: 36.8,
-            lastUpdate: new Date().toLocaleString()
-          }
-        ];
-        
-        setLinkedPatients(mockPatients);
-        if (mockPatients.length > 0) {
-          setSelectedPatient(mockPatients[0]);
-        }
-      } catch (error) {
-        console.error('Error loading linked patients:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadLinkedPatients();
   }, []);
+
+  useEffect(() => {
+    if (selectedPatient) {
+      loadPatientNotes(selectedPatient.uid);
+    }
+  }, [selectedPatient]);
+
+  const loadLinkedPatients = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const response = await fetch(`http://127.0.0.1:8000/api/caregiver-patients/?caregiver_uid=${user.uid}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Add mock health data for display purposes
+          const patientsWithHealthData = data.patients.map((patient: any) => ({
+            ...patient,
+            cardiovascular: Math.floor(Math.random() * 30) + 70, // 70-100
+            sudor: Math.floor(Math.random() * 30) + 30, // 30-60
+            temperatura: (Math.random() * 2 + 36).toFixed(1), // 36.0-38.0
+            lastUpdate: new Date().toLocaleString()
+          }));
+          
+          setLinkedPatients(patientsWithHealthData);
+          if (patientsWithHealthData.length > 0) {
+            setSelectedPatient(patientsWithHealthData[0]);
+          }
+        } else {
+          console.error('Error fetching linked patients:', response.statusText);
+          Alert.alert('Error', 'No se pudieron cargar los pacientes vinculados');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading linked patients:', error);
+      Alert.alert('Error', 'No se pudieron cargar los pacientes vinculados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPatientNotes = async (patientUid: string) => {
+    setNotesLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const response = await fetch(`http://127.0.0.1:8000/api/patient-notes/?patient_uid=${patientUid}&requester_uid=${user.uid}&requester_type=caregiver`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Show only recent notes (last 5) in dashboard
+          setPatientNotes(data.notes.slice(0, 5));
+        } else {
+          console.error('Error fetching patient notes:', response.statusText);
+          setPatientNotes([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading patient notes:', error);
+      setPatientNotes([]);
+    } finally {
+      setNotesLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -85,6 +125,33 @@ export default function CaregiverDashboardScreen() {
 
   const handleSettings = () => {
     router.push('/configuracion-usuario');
+  };
+
+  const getNoteIcon = (type: string) => {
+    switch (type) {
+      case 'analysis':
+        return { name: 'chart-line', color: '#4CAF50' };
+      case 'recommendation':
+        return { name: 'lightbulb', color: '#FF9800' };
+      case 'observation':
+        return { name: 'eye', color: '#2196F3' };
+      default:
+        return { name: 'note-text', color: '#666' };
+    }
+  };
+
+  const formatNoteDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   if (loading) {
@@ -147,7 +214,7 @@ export default function CaregiverDashboardScreen() {
                         {patient.email}
                       </ThemedText>
                       <ThemedText style={styles.lastUpdate}>
-                        Última actualización: {patient.lastUpdate}
+                        Vinculado: {patient.linked_at ? new Date(patient.linked_at).toLocaleDateString('es-ES') : 'Recientemente'}
                       </ThemedText>
                     </View>
                   </View>
@@ -192,6 +259,61 @@ export default function CaregiverDashboardScreen() {
                 <ThemedText style={styles.metricValue}>{selectedPatient.temperatura}°C</ThemedText>
                 <ThemedText style={styles.metricLabel}>Temperatura</ThemedText>
               </View>
+            </View>
+
+            {/* Notas del paciente */}
+            <View style={styles.notesSection}>
+              <View style={styles.notesSectionHeader}>
+                <ThemedText type="title" style={styles.notesTitle}>
+                  Notas del Paciente
+                </ThemedText>
+                <TouchableOpacity onPress={handleViewAnalysis} style={styles.viewAllButton}>
+                  <ThemedText style={styles.viewAllText}>Ver todas</ThemedText>
+                  <MaterialCommunityIcons name="arrow-right" size={16} color="#0A7EA4" />
+                </TouchableOpacity>
+              </View>
+
+              {notesLoading ? (
+                <View style={styles.notesLoadingContainer}>
+                  <ThemedText style={styles.notesLoadingText}>Cargando notas...</ThemedText>
+                </View>
+              ) : patientNotes.length > 0 ? (
+                <View style={styles.notesContainer}>
+                  {patientNotes.map((note) => {
+                    const icon = getNoteIcon(note.type);
+                    return (
+                      <View key={note.id} style={styles.noteCard}>
+                        <View style={styles.noteHeader}>
+                          <View style={styles.noteTypeContainer}>
+                            <MaterialCommunityIcons 
+                              name={icon.name as any} 
+                              size={16} 
+                              color={icon.color} 
+                            />
+                            <ThemedText style={[styles.noteType, { color: icon.color }]}>
+                              {note.type === 'analysis' ? 'Análisis' : 
+                               note.type === 'recommendation' ? 'Recomendación' : 'Observación'}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.noteDate}>
+                            {formatNoteDate(note.createdAt)}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.noteContent} numberOfLines={2}>
+                          {note.content}
+                        </ThemedText>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyNotesContainer}>
+                  <MaterialCommunityIcons name="note-off" size={48} color="#ccc" />
+                  <ThemedText style={styles.emptyNotesText}>
+                    No hay notas registradas para este paciente
+                  </ThemedText>
+                </View>
+              )}
             </View>
 
             {/* Acciones */}
@@ -279,8 +401,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: 'white',
-    fontFamily: 'Lufga-Bold',
+    color: '#333',
   },
   patientSelector: {
     marginBottom: 30,
@@ -370,6 +491,93 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+    textAlign: 'center',
+  },
+  notesSection: {
+    marginBottom: 30,
+  },
+  notesSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  notesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#0A7EA4',
+    marginRight: 4,
+    fontWeight: '600',
+  },
+  notesLoadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  notesLoadingText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  notesContainer: {
+    gap: 12,
+  },
+  noteCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  noteTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  noteType: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  noteDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  noteContent: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  emptyNotesContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyNotesText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
     textAlign: 'center',
   },
   actionsContainer: {

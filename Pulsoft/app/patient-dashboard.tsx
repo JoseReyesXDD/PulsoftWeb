@@ -14,35 +14,61 @@ interface PatientData {
   temperatura: number;
 }
 
+interface Note {
+  id: string;
+  content: string;
+  createdAt: string;
+  type: 'analysis' | 'recommendation' | 'observation';
+}
+
 export default function PatientDashboardScreen() {
   const [patientData, setPatientData] = useState<PatientData | null>(null);
+  const [recentNotes, setRecentNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Simular carga de datos del paciente
-    const loadPatientData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          // Aquí cargarías los datos reales del paciente desde Firebase
-          setPatientData({
-            email: user.email || 'paciente@ejemplo.com',
-            cardiovascular: 75,
-            sudor: 45,
-            temperatura: 37.2
-          });
-        }
-      } catch (error) {
-        console.error('Error loading patient data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadPatientData();
+    loadDashboardData();
   }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        // Cargar datos del paciente
+        setPatientData({
+          email: user.email || 'paciente@ejemplo.com',
+          cardiovascular: 75,
+          sudor: 45,
+          temperatura: 37.2
+        });
+
+        // Cargar notas recientes
+        await loadRecentNotes(user.uid);
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRecentNotes = async (patientUid: string) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/patient-notes/?patient_uid=${patientUid}&requester_uid=${patientUid}&requester_type=patient`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Mostrar solo las 3 notas más recientes en el dashboard
+        setRecentNotes(data.notes.slice(0, 3));
+      } else {
+        console.error('Error fetching notes:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading recent notes:', error);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -59,6 +85,33 @@ export default function PatientDashboardScreen() {
 
   const handleSettings = () => {
     router.push('/configuracion-usuario');
+  };
+
+  const getNoteIcon = (type: string) => {
+    switch (type) {
+      case 'analysis':
+        return { name: 'chart-line', color: '#4CAF50' };
+      case 'recommendation':
+        return { name: 'lightbulb', color: '#FF9800' };
+      case 'observation':
+        return { name: 'eye', color: '#2196F3' };
+      default:
+        return { name: 'note-text', color: '#666' };
+    }
+  };
+
+  const formatNoteDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   if (loading) {
@@ -109,6 +162,57 @@ export default function PatientDashboardScreen() {
             <ThemedText style={styles.metricValue}>{patientData?.temperatura}°C</ThemedText>
             <ThemedText style={styles.metricLabel}>Temperatura</ThemedText>
           </View>
+        </View>
+
+        {/* Notas recientes */}
+        <View style={styles.notesSection}>
+          <View style={styles.notesSectionHeader}>
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Notas Recientes
+            </ThemedText>
+            <TouchableOpacity onPress={handleViewNotes} style={styles.viewAllButton}>
+              <ThemedText style={styles.viewAllText}>Ver todas</ThemedText>
+              <MaterialCommunityIcons name="arrow-right" size={16} color="#0A7EA4" />
+            </TouchableOpacity>
+          </View>
+
+          {recentNotes.length > 0 ? (
+            <View style={styles.notesContainer}>
+              {recentNotes.map((note) => {
+                const icon = getNoteIcon(note.type);
+                return (
+                  <View key={note.id} style={styles.noteCard}>
+                    <View style={styles.noteHeader}>
+                      <View style={styles.noteTypeContainer}>
+                        <MaterialCommunityIcons 
+                          name={icon.name as any} 
+                          size={16} 
+                          color={icon.color} 
+                        />
+                        <ThemedText style={[styles.noteType, { color: icon.color }]}>
+                          {note.type === 'analysis' ? 'Análisis' : 
+                           note.type === 'recommendation' ? 'Recomendación' : 'Observación'}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={styles.noteDate}>
+                        {formatNoteDate(note.createdAt)}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.noteContent} numberOfLines={2}>
+                      {note.content}
+                    </ThemedText>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyNotesContainer}>
+              <MaterialCommunityIcons name="note-off" size={48} color="#ccc" />
+              <ThemedText style={styles.emptyNotesText}>
+                No hay notas registradas aún
+              </ThemedText>
+            </View>
+          )}
         </View>
 
         {/* Acciones principales */}
@@ -223,6 +327,85 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+    textAlign: 'center',
+  },
+  notesSection: {
+    marginBottom: 30,
+  },
+  notesSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#0A7EA4',
+    marginRight: 4,
+    fontWeight: '600',
+  },
+  notesContainer: {
+    gap: 12,
+  },
+  noteCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  noteTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  noteType: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  noteDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  noteContent: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  emptyNotesContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyNotesText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
     textAlign: 'center',
   },
   actionsContainer: {
