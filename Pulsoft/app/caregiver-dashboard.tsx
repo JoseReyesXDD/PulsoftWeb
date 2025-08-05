@@ -119,6 +119,96 @@ export default function CaregiverDashboardScreen() {
     }
   };
 
+  const handleViewGraphics = () => {
+    if (selectedPatient) {
+      router.push({
+        pathname: '/patient-graphics',
+        params: { 
+          patientId: selectedPatient.uid,
+          patientEmail: selectedPatient.email
+        }
+      });
+    }
+  };
+
+  const handleAddPatient = () => {
+    router.push('/add-patient');
+  };
+
+  const handleManagePatient = () => {
+    if (selectedPatient) {
+      // Mostrar opciones para manejar el paciente
+      Alert.alert(
+        'Gestionar Paciente',
+        `¿Qué deseas hacer con ${selectedPatient.email}?`,
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+          },
+          {
+            text: 'Desvincular',
+            style: 'destructive',
+            onPress: () => handleUnlinkPatient(selectedPatient),
+          },
+          {
+            text: 'Ver Perfil',
+            onPress: () => {
+              // Navegar al perfil del paciente
+              console.log('Ver perfil del paciente');
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const handleUnlinkPatient = async (patient: PatientData) => {
+    Alert.alert(
+      'Confirmar Desvinculación',
+      `¿Estás seguro de que deseas desvincular al paciente ${patient.email}? Ya no podrás ver sus datos ni notas.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Desvincular',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const user = auth.currentUser;
+              if (user) {
+                const response = await fetch('http://127.0.0.1:8000/api/unlink-patient/', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    caregiver_uid: user.uid,
+                    patient_uid: patient.uid,
+                  }),
+                });
+
+                if (response.ok) {
+                  Alert.alert('Éxito', 'Paciente desvinculado exitosamente');
+                  // Recargar la lista de pacientes
+                  loadLinkedPatients();
+                } else {
+                  const errorData = await response.json();
+                  Alert.alert('Error', errorData.error || 'No se pudo desvincular el paciente');
+                }
+              }
+            } catch (error) {
+              console.error('Error unlinking patient:', error);
+              Alert.alert('Error', 'Error al desvincular el paciente');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSelectPatient = (patient: PatientData) => {
     setSelectedPatient(patient);
   };
@@ -230,6 +320,10 @@ export default function CaregiverDashboardScreen() {
               <ThemedText style={styles.noPatientsText}>
                 No se encontraron pacientes vinculados
               </ThemedText>
+              <TouchableOpacity style={styles.addFirstPatientButton} onPress={handleAddPatient}>
+                <MaterialCommunityIcons name="account-plus" size={20} color="white" />
+                <ThemedText style={styles.addFirstPatientText}>Añadir Primer Paciente</ThemedText>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -331,17 +425,42 @@ export default function CaregiverDashboardScreen() {
 
               <TouchableOpacity 
                 style={[styles.actionButton, styles.secondaryButton]} 
-                onPress={() => router.push('/explore')}
+                onPress={handleViewGraphics}
               >
-                <MaterialCommunityIcons name="chart-line" size={24} color="#0A7EA4" />
+                <MaterialCommunityIcons name="chart-bar" size={24} color="#0A7EA4" />
                 <ThemedText style={[styles.actionButtonText, styles.secondaryButtonText]}>
                   Ver gráficas
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.secondaryButton]} 
+                onPress={handleAddPatient}
+              >
+                <MaterialCommunityIcons name="account-plus" size={24} color="#0A7EA4" />
+                <ThemedText style={[styles.actionButtonText, styles.secondaryButtonText]}>
+                  Añadir Paciente
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.secondaryButton]} 
+                onPress={handleManagePatient}
+              >
+                <MaterialCommunityIcons name="account-cog" size={24} color="#0A7EA4" />
+                <ThemedText style={[styles.actionButtonText, styles.secondaryButtonText]}>
+                  Gestionar Paciente
                 </ThemedText>
               </TouchableOpacity>
             </View>
           </View>
         )}
       </ScrollView>
+
+      {/* Floating Add Patient Button */}
+      <TouchableOpacity style={styles.floatingAddButton} onPress={handleAddPatient}>
+        <MaterialCommunityIcons name="plus" size={24} color="white" />
+      </TouchableOpacity>
 
       {/* Footer con logout */}
       <View style={styles.footer}>
@@ -459,6 +578,21 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 12,
     textAlign: 'center',
+  },
+  addFirstPatientButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0A7EA4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  addFirstPatientText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   patientDataContainer: {
     marginBottom: 20,
@@ -610,6 +744,22 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#0A7EA4',
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   footer: {
     padding: 20,
