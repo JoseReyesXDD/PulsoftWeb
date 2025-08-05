@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Firebase - Pulsoft</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #0A7EA4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #085a7a;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Debug Firebase - Pulsoft</h1>
+        
+        <div class="section">
+            <h3>1. Configuración de Firebase</h3>
+            <p>Primero, abre la consola del navegador (F12) y ejecuta:</p>
+            <textarea id="firebaseConfig" rows="8" placeholder="Pega aquí tu configuración de Firebase desde firebaseConfig.js">
+// Ejemplo de configuración:
+const firebaseConfig = {
+  apiKey: "tu-api-key",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  databaseURL: "https://tu-proyecto-default-rtdb.firebaseio.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "tu-app-id"
+};
+            </textarea>
+            <button onclick="initializeFirebase()">Inicializar Firebase</button>
+        </div>
+
+        <div class="section">
+            <h3>2. Verificar Usuario Actual</h3>
+            <button onclick="checkCurrentUser()">Verificar Usuario</button>
+            <div id="userInfo" class="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. Leer Datos del Paciente</h3>
+            <input type="text" id="patientUid" placeholder="UID del paciente" />
+            <button onclick="readPatientData()">Leer Datos</button>
+            <div id="patientData" class="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. Escribir Datos de Ejemplo</h3>
+            <input type="text" id="writePatientUid" placeholder="UID del paciente para escribir datos" />
+            <button onclick="writeSampleData()">Escribir Datos de Ejemplo</button>
+            <div id="writeLog" class="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>5. Logs</h3>
+            <button onclick="clearLogs()">Limpiar Logs</button>
+            <div id="logs" class="log"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        let db = null;
+        let auth = null;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(message);
+        }
+
+        window.initializeFirebase = async function() {
+            try {
+                const configText = document.getElementById('firebaseConfig').value;
+                const firebaseConfig = eval('(' + configText + ')');
+                
+                const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+                const { getDatabase, getAuth } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                
+                const app = initializeApp(firebaseConfig);
+                db = getDatabase(app);
+                auth = getAuth(app);
+                
+                log('Firebase inicializado correctamente', 'success');
+            } catch (error) {
+                log('Error inicializando Firebase: ' + error.message, 'error');
+            }
+        };
+
+        window.checkCurrentUser = function() {
+            if (!auth) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const user = auth.currentUser;
+            const userInfoDiv = document.getElementById('userInfo');
+            
+            if (user) {
+                userInfoDiv.innerHTML = `
+                    <div class="success">Usuario autenticado:</div>
+                    <div>UID: ${user.uid}</div>
+                    <div>Email: ${user.email}</div>
+                `;
+                log('Usuario encontrado: ' + user.uid, 'success');
+            } else {
+                userInfoDiv.innerHTML = '<div class="error">No hay usuario autenticado</div>';
+                log('No hay usuario autenticado', 'error');
+            }
+        };
+
+        window.readPatientData = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const patientUid = document.getElementById('patientUid').value;
+            if (!patientUid) {
+                log('Por favor ingresa un UID de paciente', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const patientRef = ref(db, `patients/${patientUid}`);
+                const snapshot = await get(patientRef);
+                
+                const patientDataDiv = document.getElementById('patientData');
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    patientDataDiv.innerHTML = `
+                        <div class="success">Datos encontrados:</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    log('Datos leídos correctamente', 'success');
+                } else {
+                    patientDataDiv.innerHTML = '<div class="error">No se encontraron datos para este paciente</div>';
+                    log('No se encontraron datos', 'error');
+                }
+            } catch (error) {
+                log('Error leyendo datos: ' + error.message, 'error');
+            }
+        };
+
+        window.writeSampleData = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const patientUid = document.getElementById('writePatientUid').value;
+            if (!patientUid) {
+                log('Por favor ingresa un UID de paciente', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                
+                const sampleData = {
+                    email: 'paciente@ejemplo.com',
+                    cardiovascular: Math.floor(Math.random() * 100) + 60,
+                    sudor: Math.floor(Math.random() * 100),
+                    temperatura: (36.5 + Math.random() * 1.5).toFixed(1),
+                    lastUpdate: new Date().toISOString()
+                };
+                
+                const patientRef = ref(db, `patients/${patientUid}`);
+                await set(patientRef, sampleData);
+                
+                log('Datos de ejemplo escritos correctamente', 'success');
+                document.getElementById('writeLog').innerHTML = `
+                    <div class="success">Datos escritos:</div>
+                    <pre>${JSON.stringify(sampleData, null, 2)}</pre>
+                `;
+            } catch (error) {
+                log('Error escribiendo datos: ' + error.message, 'error');
+            }
+        };
+
+        window.clearLogs = function() {
+            document.getElementById('logs').innerHTML = '';
+        };
+
+        log('Página de debug cargada. Inicializa Firebase primero.');
+    </script>
+</body>
+</html>

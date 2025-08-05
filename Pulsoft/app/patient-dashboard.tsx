@@ -29,57 +29,70 @@ export default function PatientDashboardScreen() {
     const loadPatientData = async () => {
       try {
         const user = auth.currentUser;
-        if (user) {
-          const db = getDatabase(firebaseApp);
-          const patientId = user.uid; // Usar el UID del usuario actual
-          const patientRef = ref(db, `patients/${patientId}`);
-          
-          // Escuchar cambios en tiempo real
-          const unsubscribe = onValue(patientRef, (snapshot) => {
-            const data = snapshot.val();
-            setIsConnected(true);
-                         if (data) {
-               setPatientData({
-                 email: user.email || 'paciente@ejemplo.com',
-                 uid: user.uid,
-                 cardiovascular: data.cardiovascular || 0,
-                 sudor: data.sudor || 0,
-                 temperatura: data.temperatura || 0,
-                 lastUpdate: new Date().toLocaleTimeString()
-               });
-             } else {
-               // Si no hay datos, usar valores por defecto
-               setPatientData({
-                 email: user.email || 'paciente@ejemplo.com',
-                 uid: user.uid,
-                 cardiovascular: 0,
-                 sudor: 0,
-                 temperatura: 0,
-                 lastUpdate: new Date().toLocaleTimeString()
-               });
-             }
-            setLoading(false);
-                     }, (error) => {
-             console.error('Error loading patient data:', error);
-             setIsConnected(false);
-             // En caso de error, usar valores por defecto
-             setPatientData({
-               email: user.email || 'paciente@ejemplo.com',
-               uid: user.uid,
-               cardiovascular: 0,
-               sudor: 0,
-               temperatura: 0
-             });
-             setLoading(false);
-           });
-
-          // Limpiar la suscripción cuando el componente se desmonte
-          return () => unsubscribe();
-        } else {
-          setLoading(false);
+        console.log('Usuario actual:', user?.uid, user?.email);
+        
+        if (!user) {
+          console.error('No hay usuario autenticado');
+          Alert.alert('Error', 'No se pudo autenticar al usuario');
+          router.replace('/login');
+          return;
         }
+
+        const db = getDatabase(firebaseApp);
+        const patientId = user.uid; // Usar el UID del usuario actual
+        const patientRef = ref(db, `patients/${patientId}`);
+        
+        console.log('Consultando datos en ruta:', `patients/${patientId}`);
+        
+        // Escuchar cambios en tiempo real
+        const unsubscribe = onValue(patientRef, (snapshot) => {
+          console.log('Datos recibidos de Firebase:', snapshot.val());
+          const data = snapshot.val();
+          setIsConnected(true);
+          
+          if (data) {
+            console.log('Datos encontrados:', data);
+            setPatientData({
+              email: user.email || 'paciente@ejemplo.com',
+              uid: user.uid,
+              cardiovascular: data.cardiovascular || 0,
+              sudor: data.sudor || 0,
+              temperatura: data.temperatura || 0,
+              lastUpdate: new Date().toLocaleTimeString()
+            });
+          } else {
+            console.log('No se encontraron datos en Firebase, usando valores por defecto');
+            // Si no hay datos, usar valores por defecto
+            setPatientData({
+              email: user.email || 'paciente@ejemplo.com',
+              uid: user.uid,
+              cardiovascular: 0,
+              sudor: 0,
+              temperatura: 0,
+              lastUpdate: new Date().toLocaleTimeString()
+            });
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error('Error loading patient data:', error);
+          setIsConnected(false);
+          Alert.alert('Error', 'No se pudieron cargar los datos del paciente');
+          // En caso de error, usar valores por defecto
+          setPatientData({
+            email: user.email || 'paciente@ejemplo.com',
+            uid: user.uid,
+            cardiovascular: 0,
+            sudor: 0,
+            temperatura: 0
+          });
+          setLoading(false);
+        });
+
+        // Limpiar la suscripción cuando el componente se desmonte
+        return () => unsubscribe();
       } catch (error) {
         console.error('Error loading patient data:', error);
+        Alert.alert('Error', 'Error al cargar los datos del paciente');
         setLoading(false);
       }
     };
