@@ -111,6 +111,24 @@ class CaregiverService {
   }
 
   /**
+   * Obtiene datos de gráficas de un paciente
+   */
+  async getPatientChartData(patientUid: string, caregiverUid: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(
+      `/patient-chart-data/?patient_uid=${patientUid}&caregiver_uid=${caregiverUid}`
+    );
+  }
+
+  /**
+   * Obtiene métricas actuales del paciente
+   */
+  async getPatientMetrics(patientUid: string, caregiverUid: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(
+      `/patient-metrics/?patient_uid=${patientUid}&caregiver_uid=${caregiverUid}`
+    );
+  }
+
+  /**
    * Obtiene datos mock para desarrollo
    */
   getMockPatients(): PatientData[] {
@@ -202,6 +220,24 @@ class CaregiverService {
   }
 
   /**
+   * Obtiene datos de gráficas mock para desarrollo
+   */
+  getMockChartData(): any {
+    return {
+      cardiovascular: [65, 70, 75, 80, 85, 82, 78],
+      sudor: [40, 45, 50, 48, 42, 45, 43],
+      temperatura: [36.8, 37.0, 37.2, 37.1, 36.9, 37.0, 37.1],
+      labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+      metrics: {
+        cardiovascular: 75,
+        sudor: 45,
+        temperatura: 37.2,
+        lastUpdate: new Date().toLocaleString()
+      }
+    };
+  }
+
+  /**
    * Formatea una fecha para mostrar en la interfaz
    */
   formatDate(dateString: string): string {
@@ -266,6 +302,50 @@ class CaregiverService {
         return 'Bajo';
       default:
         return 'Normal';
+    }
+  }
+
+  /**
+   * Valida si un paciente está vinculado al cuidador
+   */
+  async validatePatientLink(caregiverUid: string, patientUid: string): Promise<boolean> {
+    try {
+      const response = await this.getLinkedPatients(caregiverUid);
+      if (response.success && response.data) {
+        return response.data.linked_patients.some(patient => patient.uid === patientUid);
+      }
+      return false;
+    } catch (error) {
+      console.error('Error validating patient link:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene estadísticas del cuidador
+   */
+  async getCaregiverStats(caregiverUid: string): Promise<any> {
+    try {
+      const linkedResponse = await this.getLinkedPatients(caregiverUid);
+      if (linkedResponse.success && linkedResponse.data) {
+        return {
+          totalPatients: linkedResponse.data.total_patients,
+          linkedPatients: linkedResponse.data.linked_patients.length,
+          lastActivity: new Date().toLocaleString()
+        };
+      }
+      return {
+        totalPatients: 0,
+        linkedPatients: 0,
+        lastActivity: new Date().toLocaleString()
+      };
+    } catch (error) {
+      console.error('Error getting caregiver stats:', error);
+      return {
+        totalPatients: 0,
+        linkedPatients: 0,
+        lastActivity: new Date().toLocaleString()
+      };
     }
   }
 }

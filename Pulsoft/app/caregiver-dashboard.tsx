@@ -132,6 +132,18 @@ export default function CaregiverDashboardScreen() {
     }
   };
 
+  const handleViewCharts = () => {
+    if (selectedPatient) {
+      router.push({
+        pathname: '/patient-charts',
+        params: { 
+          patientId: selectedPatient.uid,
+          patientEmail: selectedPatient.email 
+        }
+      });
+    }
+  };
+
   const handleSelectPatient = (patient: PatientData) => {
     setSelectedPatient(patient);
   };
@@ -140,8 +152,11 @@ export default function CaregiverDashboardScreen() {
     router.push('/configuracion-usuario');
   };
 
+  const handleManagePatients = () => {
+    router.push('/manage-patient-links');
+  };
+
   const handleViewAllPatients = () => {
-    // Aquí podrías navegar a una vista que muestre todos los pacientes
     Alert.alert('Información', 'Funcionalidad para ver todos los pacientes en desarrollo');
   };
 
@@ -292,14 +307,14 @@ export default function CaregiverDashboardScreen() {
               </View>
             )}
 
-            {/* Acciones */}
+            {/* Acciones principales */}
             <View style={styles.actionsContainer}>
               <TouchableOpacity 
                 style={styles.actionButton} 
                 onPress={handleViewAnalysis}
                 disabled={!selectedPatient}
               >
-                <MaterialCommunityIcons name="chart-line" size={24} color="white" />
+                <MaterialCommunityIcons name="file-document" size={24} color="white" />
                 <ThemedText style={styles.actionButtonText}>
                   Ver análisis del paciente
                 </ThemedText>
@@ -307,11 +322,35 @@ export default function CaregiverDashboardScreen() {
 
               <TouchableOpacity 
                 style={[styles.actionButton, styles.secondaryButton]} 
-                onPress={() => router.push('/explore')}
+                onPress={handleViewCharts}
+                disabled={!selectedPatient}
               >
                 <MaterialCommunityIcons name="chart-line" size={24} color="#0A7EA4" />
                 <ThemedText style={[styles.actionButtonText, styles.secondaryButtonText]}>
                   Ver gráficas
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Acciones adicionales */}
+            <View style={styles.additionalActions}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.tertiaryButton]} 
+                onPress={handleManagePatients}
+              >
+                <MaterialCommunityIcons name="account-multiple" size={24} color="#27ae60" />
+                <ThemedText style={[styles.actionButtonText, styles.tertiaryButtonText]}>
+                  Gestionar Pacientes
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.tertiaryButton]} 
+                onPress={() => router.push('/select_patient')}
+              >
+                <MaterialCommunityIcons name="account-switch" size={24} color="#95a5a6" />
+                <ThemedText style={[styles.actionButtonText, styles.tertiaryButtonText]}>
+                  Cambiar Paciente
                 </ThemedText>
               </TouchableOpacity>
             </View>
@@ -540,7 +579,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actionsContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
   },
   actionButton: {
     flexDirection: 'row',
@@ -569,6 +608,19 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#0A7EA4',
+  },
+  additionalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tertiaryButton: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#27ae60',
+  },
+  tertiaryButtonText: {
+    color: '#27ae60',
   },
   footer: {
     padding: 20,
