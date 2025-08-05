@@ -9,4 +9,7 @@ urlpatterns = [
     path('patient-dashboard/', views_web.patient_dashboard, name='patient_dashboard'),
     path('patient-notes/', views_web.patient_notes_view, name='patient_notes'),
     path('caregiver-notes/', views_web.caregiver_notes_view, name='caregiver_notes'),
+    path('manage-patient-links/', views_web.manage_patient_links, name='manage_patient_links'),
+    path('link-patient-ajax/', views_web.link_patient_ajax, name='link_patient_ajax'),
+    path('unlink-patient-ajax/', views_web.unlink_patient_ajax, name='unlink_patient_ajax'),
 ]

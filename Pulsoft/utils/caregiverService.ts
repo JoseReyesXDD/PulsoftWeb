@@ -74,6 +74,43 @@ class CaregiverService {
   }
 
   /**
+   * Vincula un paciente a un cuidador
+   */
+  async linkPatient(caregiverUid: string, patientUid: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(
+      `/link-patient/`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          caregiver_uid: caregiverUid,
+          patient_uid: patientUid
+        })
+      }
+    );
+  }
+
+  /**
+   * Desvincula un paciente de un cuidador
+   */
+  async unlinkPatient(caregiverUid: string, patientUid: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(
+      `/unlink-patient/?caregiver_uid=${caregiverUid}&patient_uid=${patientUid}`,
+      {
+        method: 'DELETE'
+      }
+    );
+  }
+
+  /**
+   * Obtiene pacientes disponibles para vincular
+   */
+  async getAvailablePatients(caregiverUid: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(
+      `/available-patients/?caregiver_uid=${caregiverUid}`
+    );
+  }
+
+  /**
    * Obtiene datos mock para desarrollo
    */
   getMockPatients(): PatientData[] {
@@ -137,6 +174,29 @@ class CaregiverService {
         patient_email: patientEmail,
         severity: 'low',
         category: 'general'
+      }
+    ];
+  }
+
+  /**
+   * Obtiene pacientes disponibles mock para desarrollo
+   */
+  getMockAvailablePatients(): PatientData[] {
+    return [
+      {
+        uid: '3',
+        email: 'paciente3@ejemplo.com',
+        user_type: 'patient'
+      },
+      {
+        uid: '4',
+        email: 'paciente4@ejemplo.com',
+        user_type: 'patient'
+      },
+      {
+        uid: '5',
+        email: 'paciente5@ejemplo.com',
+        user_type: 'patient'
       }
     ];
   }
