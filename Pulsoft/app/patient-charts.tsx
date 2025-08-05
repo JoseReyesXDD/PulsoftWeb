@@ -2,17 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Dimensions, Alert, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, get } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import Svg, { Circle, Text as SvgText, Path, G } from 'react-native-svg';
+import Svg, { Circle, Text as SvgText, Path, Line } from 'react-native-svg';
 
 interface PatientChartData {
   cardiovascular: number;
   sudor: number;
   temperatura: number;
   lastUpdate: string;
+}
+
+interface PatientAnalysis {
+  id: string;
+  analisis_IA: string;
+  analizadoEn: string;
+  severity: 'low' | 'medium' | 'high';
+  category: 'cardiovascular' | 'sudor' | 'temperatura' | 'general';
+  cardiovascular?: number;
+  sudor?: number;
+  temperatura?: number;
 }
 
 // Componente para gráfico de doughnut
@@ -72,6 +83,79 @@ const DoughnutChart = ({ value, size = 200, strokeWidth = 20, color = '#FF6B6B',
       {label && (
         <ThemedText style={styles.chartLabel}>{label}</ThemedText>
       )}
+    </View>
+  );
+};
+
+// Componente para gráfico de tendencias
+interface TrendChartProps {
+  data: { value: number; date: string }[];
+  title: string;
+  color: string;
+  maxValue: number;
+}
+
+const TrendChart = ({ data, title, color, maxValue }: TrendChartProps) => {
+  if (data.length < 2) return null;
+
+  const width = 300;
+  const height = 150;
+  const padding = 20;
+  const chartWidth = width - 2 * padding;
+  const chartHeight = height - 2 * padding;
+
+  const points = data.map((item, index) => {
+    const x = padding + (index / (data.length - 1)) * chartWidth;
+    const y = height - padding - (item.value / maxValue) * chartHeight;
+    return { x, y, value: item.value };
+  });
+
+  const pathData = points.map((point, index) => 
+    `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
+  ).join(' ');
+
+  return (
+    <View style={styles.trendChartContainer}>
+      <ThemedText style={styles.trendChartTitle}>{title}</ThemedText>
+      <Svg width={width} height={height}>
+        {/* Líneas de fondo */}
+        {[0, 25, 50, 75, 100].map((percent, index) => {
+          const y = height - padding - (percent / 100) * chartHeight;
+          return (
+            <Line
+              key={index}
+              x1={padding}
+              y1={y}
+              x2={width - padding}
+              y2={y}
+              stroke="#E8E8E8"
+              strokeWidth="1"
+            />
+          );
+        })}
+        
+        {/* Línea de tendencia */}
+        <Path
+          d={pathData}
+          stroke={color}
+          strokeWidth="3"
+          fill="none"
+        />
+        
+        {/* Puntos de datos */}
+        {points.map((point, index) => (
+          <Circle
+            key={index}
+            cx={point.x}
+            cy={point.y}
+            r="4"
+            fill={color}
+          />
+        ))}
+      </Svg>
+      <ThemedText style={styles.trendChartValue}>
+        Último valor: {data[data.length - 1]?.value || 0}
+      </ThemedText>
     </View>
   );
 };
@@ -243,7 +327,9 @@ const PolarAreaChartSudor = ({ sudor, size = 300 }: PolarAreaChartSudorProps) =>
 
 export default function PatientChartsScreen() {
   const [patientData, setPatientData] = useState<PatientChartData | null>(null);
+  const [analyses, setAnalyses] = useState<PatientAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedChart, setSelectedChart] = useState<string>('overview');
   const router = useRouter();
   const params = useLocalSearchParams();
   const patientId = params.patientId as string;
@@ -283,7 +369,38 @@ export default function PatientChartsScreen() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Cargar análisis del paciente
+    const analysesRef = ref(db, `patients/${patientId}/analyses`);
+    const analysesUnsubscribe = onValue(analysesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const analysesData = snapshot.val();
+        const analyses: PatientAnalysis[] = [];
+        
+        for (const analysisId in analysesData) {
+          const analysis = analysesData[analysisId];
+          analyses.push({
+            id: analysisId,
+            analisis_IA: analysis.analisis_IA || 'Análisis no disponible',
+            analizadoEn: analysis.analizadoEn || new Date().toISOString(),
+            severity: analysis.severity || 'low',
+            category: analysis.category || 'general',
+            cardiovascular: analysis.cardiovascular || 0,
+            sudor: analysis.sudor || 0,
+            temperatura: analysis.temperatura || 0
+          });
+        }
+        
+        analyses.sort((a, b) => new Date(b.analizadoEn).getTime() - new Date(a.analizadoEn).getTime());
+        setAnalyses(analyses);
+      } else {
+        setAnalyses([]);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      analysesUnsubscribe();
+    };
   }, [patientId]);
 
   const getHealthStatus = (cardiovascular: number, sudor: number, temperatura: number) => {
@@ -294,6 +411,18 @@ export default function PatientChartsScreen() {
     } else {
       return { status: 'Estable', color: '#4CAF50', icon: 'check-circle' };
     }
+  };
+
+  const generateTrendData = (category: string) => {
+    const categoryAnalyses = analyses.filter(a => a.category === category);
+    return categoryAnalyses.slice(-5).map(analysis => ({
+      value: analysis[category as keyof PatientAnalysis] as number || 0,
+      date: new Date(analysis.analizadoEn).toLocaleDateString()
+    }));
+  };
+
+  const getLatestAnalysis = (category: string) => {
+    return analyses.find(a => a.category === category);
   };
 
   if (loading) {
@@ -335,8 +464,43 @@ export default function PatientChartsScreen() {
       </View>
 
       <ScrollView style={styles.content}>
+        {/* Selector de gráficas */}
+        <View style={styles.chartSelector}>
+          <ThemedText type="title" style={styles.sectionTitle}>
+            Tipo de Gráfica
+          </ThemedText>
+          <View style={styles.selectorContainer}>
+            {[
+              { id: 'overview', label: 'Resumen', icon: 'view-dashboard' },
+              { id: 'trends', label: 'Tendencias', icon: 'trending-up' },
+              { id: 'analysis', label: 'Análisis', icon: 'chart-line' }
+            ].map((chart) => (
+              <TouchableOpacity
+                key={chart.id}
+                style={[
+                  styles.selectorButton,
+                  selectedChart === chart.id && styles.selectorButtonActive
+                ]}
+                onPress={() => setSelectedChart(chart.id)}
+              >
+                <MaterialCommunityIcons 
+                  name={chart.icon as any} 
+                  size={20} 
+                  color={selectedChart === chart.id ? 'white' : '#666'} 
+                />
+                <ThemedText style={[
+                  styles.selectorButtonText,
+                  selectedChart === chart.id && styles.selectorButtonTextActive
+                ]}>
+                  {chart.label}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Resumen de métricas */}
-        {patientData && (
+        {selectedChart === 'overview' && patientData && (
           <View style={styles.metricsSummary}>
             <ThemedText type="title" style={styles.sectionTitle}>
               Resumen de Métricas
@@ -364,13 +528,13 @@ export default function PatientChartsScreen() {
           </View>
         )}
 
-        {/* Gráficas */}
-        <View style={styles.chartsSection}>
-          <ThemedText type="title" style={styles.sectionTitle}>
-            Gráficas Biométricas
-          </ThemedText>
-          
-          {patientData && (
+        {/* Gráficas principales */}
+        {selectedChart === 'overview' && patientData && (
+          <View style={styles.chartsSection}>
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Gráficas Biométricas
+            </ThemedText>
+            
             <View style={styles.chartsContainer}>
               {/* Gráfico de temperatura */}
               <View style={styles.chartWrapper}>
@@ -401,8 +565,91 @@ export default function PatientChartsScreen() {
                 />
               </View>
             </View>
-          )}
-        </View>
+          </View>
+        )}
+
+        {/* Gráficas de tendencias */}
+        {selectedChart === 'trends' && analyses.length > 0 && (
+          <View style={styles.trendsSection}>
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Tendencias Recientes
+            </ThemedText>
+            <View style={styles.trendsContainer}>
+              <TrendChart 
+                data={generateTrendData('cardiovascular')}
+                title="Ritmo Cardíaco"
+                color="#FF6B6B"
+                maxValue={100}
+              />
+              <TrendChart 
+                data={generateTrendData('sudor')}
+                title="Nivel de Sudoración"
+                color="#4BC0C0"
+                maxValue={100}
+              />
+              <TrendChart 
+                data={generateTrendData('temperatura')}
+                title="Temperatura"
+                color="#FFCD56"
+                maxValue={40}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Análisis detallados */}
+        {selectedChart === 'analysis' && (
+          <View style={styles.analysisSection}>
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Análisis Detallados
+            </ThemedText>
+            
+            {analyses.length > 0 ? (
+              <View style={styles.analysisContainer}>
+                {analyses.slice(0, 3).map((analysis) => (
+                  <View key={analysis.id} style={styles.analysisCard}>
+                    <View style={styles.analysisHeader}>
+                      <MaterialCommunityIcons 
+                        name="chart-line" 
+                        size={20} 
+                        color="#0A7EA4" 
+                      />
+                      <ThemedText style={styles.analysisCategory}>
+                        {analysis.category.charAt(0).toUpperCase() + analysis.category.slice(1)}
+                      </ThemedText>
+                    </View>
+                    
+                    <ThemedText style={styles.analysisText}>
+                      {analysis.analisis_IA}
+                    </ThemedText>
+                    
+                    <View style={styles.analysisFooter}>
+                      <ThemedText style={styles.analysisDate}>
+                        {new Date(analysis.analizadoEn).toLocaleDateString('es-ES', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons name="chart-line-off" size={64} color="#ccc" />
+                <ThemedText style={styles.emptyTitle}>
+                  No hay análisis disponibles
+                </ThemedText>
+                <ThemedText style={styles.emptySubtitle}>
+                  Este paciente aún no tiene análisis detallados
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Información adicional */}
         {patientData && (
@@ -422,6 +669,13 @@ export default function PatientChartsScreen() {
               <MaterialCommunityIcons name="account-heart" size={20} color="#666" />
               <ThemedText style={styles.infoText}>
                 Paciente: {patientEmail}
+              </ThemedText>
+            </View>
+
+            <View style={styles.infoCard}>
+              <MaterialCommunityIcons name="chart-line" size={20} color="#666" />
+              <ThemedText style={styles.infoText}>
+                Análisis disponibles: {analyses.length}
               </ThemedText>
             </View>
           </View>
@@ -490,6 +744,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: 'white',
   },
+  chartSelector: {
+    marginBottom: 30,
+  },
+  selectorContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  selectorButton: {
+    flex: 1,
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  selectorButtonActive: {
+    backgroundColor: '#0A7EA4',
+    borderColor: '#0A7EA4',
+  },
+  selectorButtonText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  selectorButtonTextActive: {
+    color: 'white',
+  },
   metricsSummary: {
     marginBottom: 30,
   },
@@ -554,6 +837,94 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+  },
+  trendsSection: {
+    marginBottom: 30,
+  },
+  trendsContainer: {
+    gap: 20,
+  },
+  trendChartContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  trendChartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  trendChartValue: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  analysisSection: {
+    marginBottom: 30,
+  },
+  analysisContainer: {
+    gap: 16,
+  },
+  analysisCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  analysisCategory: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0A7EA4',
+    marginLeft: 8,
+  },
+  analysisText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333',
+    marginBottom: 12,
+  },
+  analysisFooter: {
+    alignItems: 'flex-end',
+  },
+  analysisDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   infoSection: {
     marginBottom: 20,
