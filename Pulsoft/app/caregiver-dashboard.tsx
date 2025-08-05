@@ -154,8 +154,13 @@ export default function CaregiverDashboardScreen() {
           {
             text: 'Ver Perfil',
             onPress: () => {
-              // Navegar al perfil del paciente
-              console.log('Ver perfil del paciente');
+              router.push({
+                pathname: '/patient-profile',
+                params: { 
+                  patientId: selectedPatient.uid,
+                  viewOnly: 'true'
+                }
+              });
             },
           },
         ]
@@ -267,9 +272,14 @@ export default function CaregiverDashboardScreen() {
             </ThemedText>
           </View>
         </View>
-        <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
-          <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => router.push('/caregiver-profile')} style={styles.profileButton}>
+            <MaterialCommunityIcons name="account-circle" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
+            <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -508,6 +518,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  profileButton: {
+    padding: 8,
   },
   settingsButton: {
     padding: 8,

@@ -137,9 +137,14 @@ export default function PatientDashboardScreen() {
             </ThemedText>
           </View>
         </View>
-        <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
-          <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => router.push('/patient-profile')} style={styles.profileButton}>
+            <MaterialCommunityIcons name="account-circle" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
+            <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -291,6 +296,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  profileButton: {
+    padding: 8,
   },
   settingsButton: {
     padding: 8,

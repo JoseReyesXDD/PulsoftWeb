@@ -9,4 +9,5 @@ urlpatterns = [
     path('search-patients/', api_views.SearchPatientsView.as_view(), name='search_patients_api'),
     path('link-patient/', api_views.LinkPatientView.as_view(), name='link_patient_api'),
     path('unlink-patient/', api_views.UnlinkPatientView.as_view(), name='unlink_patient_api'),
+    path('user-profile/', api_views.UserProfileView.as_view(), name='user_profile_api'),
 ]
