@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Alert, RefreshControl, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth, signOut } from 'firebase/auth';
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { PatientNotesList } from '@/components/PatientNotesList';
 import { caregiverService } from '../utils/caregiverService';
+import { mockDataService } from '../utils/mockDataService';
 import { PatientAnalysis } from '../types/caregiver';
 
 export default function CaregiverNotesScreen() {
@@ -16,6 +17,7 @@ export default function CaregiverNotesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [patientEmail, setPatientEmail] = useState('');
   const [totalNotes, setTotalNotes] = useState(0);
+  const [patientInfo, setPatientInfo] = useState<any>(null);
   
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -40,6 +42,12 @@ export default function CaregiverNotesScreen() {
         Alert.alert('Error', 'No hay usuario autenticado');
         router.replace('/login');
         return;
+      }
+
+      // Obtener información del paciente
+      const patient = mockDataService.getPatient(patientIdParam);
+      if (patient) {
+        setPatientInfo(patient);
       }
 
       // Validar que el paciente esté vinculado al cuidador
@@ -72,18 +80,18 @@ export default function CaregiverNotesScreen() {
       } else {
         // Fallback a datos mock si la API no está disponible
         console.log('API no disponible, usando datos mock');
-        const mockAnalyses = caregiverService.getMockAnalyses(patientEmailParam);
-        setAnalyses(mockAnalyses);
-        setTotalNotes(mockAnalyses.length);
+        const mockNotes = mockDataService.generateStaticNotes(patientIdParam);
+        setAnalyses(mockNotes);
+        setTotalNotes(mockNotes.length);
       }
     } catch (error) {
       console.error('Error loading patient analyses:', error);
       Alert.alert('Error', 'No se pudieron cargar los análisis del paciente');
       
       // Fallback a datos mock en caso de error
-      const mockAnalyses = caregiverService.getMockAnalyses(patientEmailParam);
-      setAnalyses(mockAnalyses);
-      setTotalNotes(mockAnalyses.length);
+      const mockNotes = mockDataService.generateStaticNotes(patientIdParam);
+      setAnalyses(mockNotes);
+      setTotalNotes(mockNotes.length);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -143,7 +151,7 @@ export default function CaregiverNotesScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <MaterialCommunityIcons name="loading" size={48} color="#0A7EA4" />
+        <ActivityIndicator size="large" color="#0A7EA4" />
         <ThemedText style={styles.loadingText}>Cargando análisis...</ThemedText>
       </ThemedView>
     );
@@ -163,11 +171,16 @@ export default function CaregiverNotesScreen() {
               Análisis del Paciente
             </ThemedText>
             <ThemedText style={styles.subtitle}>
-              {patientEmail}
+              {patientInfo?.name || patientEmail}
             </ThemedText>
             <ThemedText style={styles.notesCount}>
               {totalNotes} análisis disponible{totalNotes !== 1 ? 's' : ''}
             </ThemedText>
+            {patientInfo && (
+              <ThemedText style={styles.patientDetails}>
+                {patientInfo.condition} - {patientInfo.age} años
+              </ThemedText>
+            )}
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -183,7 +196,7 @@ export default function CaregiverNotesScreen() {
           analyses={analyses}
           onShare={handleShareAnalysis}
           onExport={handleExportAnalysis}
-          patientEmail={patientEmail}
+          patientEmail={patientInfo?.name || patientEmail}
         />
       </View>
 
@@ -245,6 +258,11 @@ const styles = StyleSheet.create({
   notesCount: {
     fontSize: 12,
     color: '#0A7EA4',
+    marginTop: 2,
+  },
+  patientDetails: {
+    fontSize: 11,
+    color: '#999',
     marginTop: 2,
   },
   headerActions: {

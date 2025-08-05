@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { PatientCharts } from '@/components/PatientCharts';
 import { caregiverService } from '../utils/caregiverService';
+import { mockDataService } from '../utils/mockDataService';
 
 interface PatientData {
   uid: string;
@@ -24,6 +25,9 @@ interface PatientData {
   sudor?: number;
   temperatura?: number;
   lastUpdate?: string;
+  name?: string;
+  age?: number;
+  condition?: string;
 }
 
 interface ChartData {
@@ -31,6 +35,11 @@ interface ChartData {
   sudor: number[];
   temperatura: number[];
   labels: string[];
+  patientInfo?: {
+    name: string;
+    age: number;
+    condition: string;
+  };
 }
 
 export default function PatientChartsScreen() {
@@ -38,6 +47,7 @@ export default function PatientChartsScreen() {
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [realTimeMode, setRealTimeMode] = useState(false);
   const [patientId, setPatientId] = useState('');
   const [patientEmail, setPatientEmail] = useState('');
   
@@ -67,27 +77,29 @@ export default function PatientChartsScreen() {
         return;
       }
 
-      // Cargar datos del paciente
-      const patientData: PatientData = {
-        uid: patientUid,
-        email: patientEmail,
-        cardiovascular: 75,
-        sudor: 45,
-        temperatura: 37.2,
-        lastUpdate: new Date().toLocaleString()
-      };
+      // Obtener datos del paciente desde el servicio mock
+      const patient = mockDataService.getPatient(patientUid);
+      if (patient) {
+        setPatientData(patient);
+      } else {
+        // Datos por defecto si no se encuentra el paciente
+        const defaultPatient: PatientData = {
+          uid: patientUid,
+          email: patientEmail,
+          cardiovascular: 75,
+          sudor: 45,
+          temperatura: 37.2,
+          lastUpdate: new Date().toLocaleString(),
+          name: 'Paciente',
+          age: 70,
+          condition: 'General'
+        };
+        setPatientData(defaultPatient);
+      }
 
-      setPatientData(patientData);
-
-      // Cargar datos de gráficas (mock por ahora)
-      const mockChartData: ChartData = {
-        cardiovascular: [65, 70, 75, 80, 85, 82, 78],
-        sudor: [40, 45, 50, 48, 42, 45, 43],
-        temperatura: [36.8, 37.0, 37.2, 37.1, 36.9, 37.0, 37.1],
-        labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-      };
-
-      setChartData(mockChartData);
+      // Cargar datos de gráficas en tiempo real
+      const realTimeChartData = mockDataService.generateRealTimeChartData(patientUid);
+      setChartData(realTimeChartData);
 
     } catch (error) {
       console.error('Error loading patient data:', error);
@@ -140,6 +152,17 @@ export default function PatientChartsScreen() {
     );
   };
 
+  const toggleRealTimeMode = () => {
+    setRealTimeMode(!realTimeMode);
+    Alert.alert(
+      realTimeMode ? 'Modo Estático' : 'Modo Tiempo Real',
+      realTimeMode 
+        ? 'Cambiando a modo estático. Los datos se actualizarán cada 5 segundos.'
+        : 'Activando modo tiempo real. Los datos se actualizarán automáticamente.',
+      [{ text: 'OK' }]
+    );
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
@@ -175,11 +198,21 @@ export default function PatientChartsScreen() {
               Gráficas del Paciente
             </ThemedText>
             <ThemedText style={styles.subtitle}>
-              {patientData.email}
+              {patientData.name || patientData.email}
+            </ThemedText>
+            <ThemedText style={styles.realTimeStatus}>
+              {realTimeMode ? '🔴 Tiempo Real' : '📊 Estático'}
             </ThemedText>
           </View>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity onPress={toggleRealTimeMode} style={styles.actionButton}>
+            <MaterialCommunityIcons 
+              name={realTimeMode ? "clock-outline" : "clock"} 
+              size={20} 
+              color="#0A7EA4" 
+            />
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleShareCharts} style={styles.actionButton}>
             <MaterialCommunityIcons name="share" size={20} color="#0A7EA4" />
           </TouchableOpacity>
@@ -201,8 +234,12 @@ export default function PatientChartsScreen() {
             <MaterialCommunityIcons name="account-heart" size={32} color="#0A7EA4" />
           </View>
           <View style={styles.patientDetails}>
-            <ThemedText style={styles.patientName}>{patientData.email}</ThemedText>
-            <ThemedText style={styles.patientStatus}>Paciente Activo</ThemedText>
+            <ThemedText style={styles.patientName}>
+              {patientData.name || patientData.email}
+            </ThemedText>
+            <ThemedText style={styles.patientStatus}>
+              {patientData.condition ? `${patientData.condition} - ${patientData.age} años` : 'Paciente Activo'}
+            </ThemedText>
             <ThemedText style={styles.lastUpdate}>
               Última actualización: {patientData.lastUpdate}
             </ThemedText>
@@ -214,6 +251,7 @@ export default function PatientChartsScreen() {
           <PatientCharts 
             patientData={patientData}
             chartData={chartData}
+            realTime={realTimeMode}
           />
         )}
 
@@ -319,6 +357,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  realTimeStatus: {
+    fontSize: 12,
+    color: '#0A7EA4',
+    marginTop: 2,
+    fontWeight: '600',
   },
   headerActions: {
     flexDirection: 'row',

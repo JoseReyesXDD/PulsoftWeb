@@ -9,6 +9,9 @@ export interface PatientData {
   temperatura?: number;
   lastUpdate?: string;
   notesCount?: number;
+  name?: string;
+  age?: number;
+  condition?: string;
 }
 
 export interface PatientAnalysis {
@@ -34,6 +37,12 @@ export interface PatientNotesResponse {
   total_notes: number;
 }
 
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
 export interface CaregiverDashboardState {
   selectedPatient: PatientData | null;
   linkedPatients: PatientData[];
@@ -46,48 +55,57 @@ export interface CaregiverNotesState {
   loading: boolean;
   refreshing: boolean;
   patientEmail: string;
-  patientId: string;
   totalNotes: number;
 }
 
-// Tipos para las acciones del cuidador
-export type CaregiverAction = 
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_REFRESHING'; payload: boolean }
-  | { type: 'SET_LINKED_PATIENTS'; payload: PatientData[] }
-  | { type: 'SET_SELECTED_PATIENT'; payload: PatientData | null }
-  | { type: 'SET_ANALYSES'; payload: PatientAnalysis[] }
-  | { type: 'SET_PATIENT_INFO'; payload: { email: string; id: string; totalNotes: number } };
+export interface CaregiverAction {
+  type: string;
+  payload?: any;
+}
 
-// Tipos para los parámetros de navegación
 export interface CaregiverNotesParams {
   patientId: string;
-  patientEmail?: string;
+  patientEmail: string;
 }
 
-// Tipos para las respuestas de la API
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-// Tipos para las métricas del paciente
 export interface PatientMetrics {
-  cardiovascular?: number;
-  sudor?: number;
-  temperatura?: number;
-  lastUpdate?: string;
+  cardiovascular: number;
+  sudor: number;
+  temperatura: number;
+  lastUpdate: string;
+  status: 'normal' | 'warning' | 'alert';
+  patientInfo?: {
+    name: string;
+    age: number;
+    condition: string;
+  };
 }
 
-// Tipos para las notificaciones
+export interface ChartData {
+  cardiovascular: number[];
+  sudor: number[];
+  temperatura: number[];
+  labels: string[];
+  patientInfo?: {
+    name: string;
+    age: number;
+    condition: string;
+  };
+}
+
 export interface CaregiverNotification {
   id: string;
-  type: 'analysis' | 'alert' | 'reminder';
+  type: 'info' | 'warning' | 'alert' | 'success';
   title: string;
   message: string;
-  patientId: string;
   timestamp: string;
+  patientId?: string;
   read: boolean;
+}
+
+export interface RealTimeData {
+  patientId: string;
+  metrics: PatientMetrics;
+  chartData: ChartData;
+  lastUpdate: string;
 }
