@@ -3,40 +3,83 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'rea
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth, signOut } from 'firebase/auth';
+import { getDatabase, ref, onValue } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
 interface PatientData {
   email: string;
+  uid: string;
   cardiovascular: number;
   sudor: number;
   temperatura: number;
+  lastUpdate?: string;
 }
 
 export default function PatientDashboardScreen() {
   const [patientData, setPatientData] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const router = useRouter();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Simular carga de datos del paciente
+    // Cargar datos reales del paciente desde Firebase
     const loadPatientData = async () => {
       try {
         const user = auth.currentUser;
         if (user) {
-          // Aquí cargarías los datos reales del paciente desde Firebase
-          setPatientData({
-            email: user.email || 'paciente@ejemplo.com',
-            cardiovascular: 75,
-            sudor: 45,
-            temperatura: 37.2
-          });
+          const db = getDatabase(firebaseApp);
+          const patientId = user.uid; // Usar el UID del usuario actual
+          const patientRef = ref(db, `patients/${patientId}`);
+          
+          // Escuchar cambios en tiempo real
+          const unsubscribe = onValue(patientRef, (snapshot) => {
+            const data = snapshot.val();
+            setIsConnected(true);
+                         if (data) {
+               setPatientData({
+                 email: user.email || 'paciente@ejemplo.com',
+                 uid: user.uid,
+                 cardiovascular: data.cardiovascular || 0,
+                 sudor: data.sudor || 0,
+                 temperatura: data.temperatura || 0,
+                 lastUpdate: new Date().toLocaleTimeString()
+               });
+             } else {
+               // Si no hay datos, usar valores por defecto
+               setPatientData({
+                 email: user.email || 'paciente@ejemplo.com',
+                 uid: user.uid,
+                 cardiovascular: 0,
+                 sudor: 0,
+                 temperatura: 0,
+                 lastUpdate: new Date().toLocaleTimeString()
+               });
+             }
+            setLoading(false);
+                     }, (error) => {
+             console.error('Error loading patient data:', error);
+             setIsConnected(false);
+             // En caso de error, usar valores por defecto
+             setPatientData({
+               email: user.email || 'paciente@ejemplo.com',
+               uid: user.uid,
+               cardiovascular: 0,
+               sudor: 0,
+               temperatura: 0
+             });
+             setLoading(false);
+           });
+
+          // Limpiar la suscripción cuando el componente se desmonte
+          return () => unsubscribe();
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error loading patient data:', error);
-      } finally {
         setLoading(false);
       }
     };
@@ -82,11 +125,30 @@ export default function PatientDashboardScreen() {
             <ThemedText style={styles.subtitle}>
               Bienvenido {patientData?.email}
             </ThemedText>
+                         {patientData?.lastUpdate && (
+               <ThemedText style={styles.updateText}>
+                 Última actualización: {patientData.lastUpdate}
+               </ThemedText>
+             )}
+             {patientData?.uid && (
+               <ThemedText style={styles.uidText}>
+                 ID: {patientData.uid}
+               </ThemedText>
+             )}
           </View>
         </View>
-        <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
-          <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <View style={[styles.connectionIndicator, { backgroundColor: isConnected ? '#4CAF50' : '#FF6B6B' }]}>
+            <MaterialCommunityIcons 
+              name={isConnected ? "wifi" : "wifi-off"} 
+              size={16} 
+              color="white" 
+            />
+          </View>
+          <TouchableOpacity onPress={handleSettings} style={styles.settingsButton}>
+            <MaterialCommunityIcons name="cog" size={24} color="#0A7EA4" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -190,6 +252,29 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     padding: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  connectionIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  updateText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  uidText: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 2,
+    fontFamily: 'monospace',
   },
   content: {
     flex: 1,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Dimensions, TextInput, ScrollView } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Alert, Dimensions, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { signInWithEmailAndPassword, getAuth } from 'firebase/auth';
@@ -21,7 +21,6 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    // Validaciones
     if (!email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
@@ -39,12 +38,8 @@ export default function LoginScreen() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await userCredential.user.getIdToken();
       
-      // Guardar el token en AsyncStorage o contexto global
-      // await AsyncStorage.setItem('userToken', idToken);
-      
       Alert.alert('¡Login exitoso!', `Bienvenido ${role}`);
       
-      // Redirigir según el rol
       if (role === 'Paciente') {
         router.replace('/patient-dashboard');
       } else if (role === 'Cuidador') {
@@ -74,178 +69,191 @@ export default function LoginScreen() {
   };
 
   const isFormValid = email && password && email.includes('@');
+  const windowHeight = Dimensions.get('window').height;
 
   return (
-    <ThemedView style={styles.container}>
-      {!role ? (
-        // Pantalla de selección de rol
-        <View style={styles.roleSelectionContainer}>
-          <View style={styles.logoContainer}>
-            <MaterialCommunityIcons name="heart-pulse" size={64} color="#0A7EA4" />
-            <ThemedText type="title" style={styles.appTitle}>Pulsoft</ThemedText>
-            <ThemedText style={styles.appSubtitle}>Monitoreo de salud inteligente</ThemedText>
-          </View>
-
-          <View style={styles.roleContainer}>
-            <ThemedText type="title" style={styles.title}>¿Quién eres?</ThemedText>
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={styles.roleButton} 
-                onPress={() => handleRoleSelect('Paciente')}
-                activeOpacity={0.8}
-              >
-                <View style={styles.roleButtonContent}>
-                  <MaterialCommunityIcons name="account-heart" size={32} color="#fff" />
-                  <ThemedText style={styles.roleButtonText}>Paciente</ThemedText>
-                  <ThemedText style={styles.roleButtonSubtext}>
-                    Monitorea tu salud
-                  </ThemedText>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.roleButton} 
-                onPress={() => handleRoleSelect('Cuidador')}
-                activeOpacity={0.8}
-              >
-                <View style={styles.roleButtonContent}>
-                  <MaterialCommunityIcons name="account-supervisor" size={32} color="#fff" />
-                  <ThemedText style={styles.roleButtonText}>Cuidador</ThemedText>
-                  <ThemedText style={styles.roleButtonSubtext}>
-                    Cuida de otros
-                  </ThemedText>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            onPress={() => router.push('/register')}
-            style={styles.createAccountButton}
+    <ThemedView style={[styles.container, { backgroundColor: '#fff' }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+      >
+        {!role ? (
+          <ScrollView 
+            contentContainerStyle={[styles.roleSelectionContainer, { minHeight: windowHeight }]}
+            keyboardShouldPersistTaps="handled"
           >
-            <ThemedText style={styles.createAccountText}>
-              ¿No tienes cuenta? Crear cuenta
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        // Pantalla de login
-        <ScrollView style={styles.loginContainer} contentContainerStyle={styles.loginContent}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => setRole(null)} style={styles.backButton}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color="#0A7EA4" />
-            </TouchableOpacity>
-            <ThemedText type="title" style={styles.headerTitle}>
-              Iniciar sesión
-            </ThemedText>
-          </View>
-
-          <View style={styles.loginForm}>
-            <View style={styles.roleIndicator}>
-              <MaterialCommunityIcons 
-                name={role === 'Paciente' ? 'account-heart' : 'account-supervisor'} 
-                size={24} 
-                color="#0A7EA4" 
-              />
-              <ThemedText style={styles.roleIndicatorText}>
-                {role}
-              </ThemedText>
+            <View style={styles.logoContainer}>
+              <MaterialCommunityIcons name="heart-pulse" size={64} color="#0A7EA4" />
+              <ThemedText type="title" style={styles.appTitle}>Pulsoft</ThemedText>
+              <ThemedText style={styles.appSubtitle}>Monitoreo de salud inteligente</ThemedText>
             </View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.inputLabel}>Correo electrónico</ThemedText>
-              <View style={styles.textInputContainer}>
-                <MaterialCommunityIcons name="email-outline" size={20} color="#666" />
-                <TextInput
-                  style={styles.textInput}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Ingresa tu correo electrónico"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <ThemedText style={styles.inputLabel}>Contraseña</ThemedText>
-              <View style={styles.textInputContainer}>
-                <MaterialCommunityIcons name="lock-outline" size={20} color="#666" />
-                <TextInput
-                  style={styles.textInput}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Ingresa tu contraseña"
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
+            <View style={styles.roleContainer}>
+              <ThemedText type="title" style={styles.title}>¿Quién eres?</ThemedText>
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={styles.roleButton} 
+                  onPress={() => handleRoleSelect('Paciente')}
+                  activeOpacity={0.8}
                 >
-                  <MaterialCommunityIcons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#666"
-                  />
+                  <View style={styles.roleButtonContent}>
+                    <MaterialCommunityIcons name="account-heart" size={32} color="#fff" />
+                    <ThemedText style={styles.roleButtonText}>Paciente</ThemedText>
+                    <ThemedText style={styles.roleButtonSubtext}>
+                      Monitorea tu salud
+                    </ThemedText>
+                  </View>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.roleButton} 
+                  onPress={() => handleRoleSelect('Cuidador')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.roleButtonContent}>
+                    <MaterialCommunityIcons name="account-supervisor" size={32} color="#fff" />
+                    <ThemedText style={styles.roleButtonText}>Cuidador</ThemedText>
+                    <ThemedText style={styles.roleButtonSubtext}>
+                      Cuida de otros
+                    </ThemedText>
+                  </View>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
-                (!isFormValid || loading) && styles.disabledButton
-              ]}
-              onPress={handleLogin}
-              disabled={!isFormValid || loading}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons 
-                name="login" 
-                size={20} 
-                color="white" 
-              />
-              <ThemedText style={styles.loginButtonText}>
-                {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
-              </ThemedText>
-            </TouchableOpacity>
-
             <TouchableOpacity 
               onPress={() => router.push('/register')}
-              style={styles.createAccountLink}
+              style={styles.createAccountButton}
             >
-              <ThemedText style={styles.createAccountLinkText}>
+              <ThemedText style={styles.createAccountText}>
                 ¿No tienes cuenta? Crear cuenta
               </ThemedText>
             </TouchableOpacity>
-          </View>
-        </ScrollView>
-      )}
+          </ScrollView>
+        ) : (
+          <ScrollView 
+            style={styles.loginContainer} 
+            contentContainerStyle={[styles.loginContent, { minHeight: windowHeight }]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => setRole(null)} style={styles.backButton}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color="#0A7EA4" />
+              </TouchableOpacity>
+              <ThemedText type="title" style={styles.headerTitle}>
+                Iniciar sesión
+              </ThemedText>
+            </View>
+
+            <View style={styles.loginForm}>
+              <View style={styles.roleIndicator}>
+                <MaterialCommunityIcons 
+                  name={role === 'Paciente' ? 'account-heart' : 'account-supervisor'} 
+                  size={24} 
+                  color="#0A7EA4" 
+                />
+                <ThemedText style={styles.roleIndicatorText}>
+                  {role}
+                </ThemedText>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <ThemedText style={styles.inputLabel}>Correo electrónico</ThemedText>
+                <View style={styles.textInputContainer}>
+                  <MaterialCommunityIcons name="email-outline" size={20} color="#666" />
+                  <TextInput
+                    style={styles.textInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Ingresa tu correo electrónico"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <ThemedText style={styles.inputLabel}>Contraseña</ThemedText>
+                <View style={styles.textInputContainer}>
+                  <MaterialCommunityIcons name="lock-outline" size={20} color="#666" />
+                  <TextInput
+                    style={styles.textInput}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Ingresa tu contraseña"
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <MaterialCommunityIcons
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  (!isFormValid || loading) && styles.disabledButton
+                ]}
+                onPress={handleLogin}
+                disabled={!isFormValid || loading}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons 
+                  name="login" 
+                  size={20} 
+                  color="white" 
+                />
+                <ThemedText style={styles.loginButtonText}>
+                  {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => router.push('/register')}
+                style={styles.createAccountLink}
+              >
+                <ThemedText style={styles.createAccountLinkText}>
+                  ¿No tienes cuenta? Crear cuenta
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
 
-const screenWidth = Dimensions.get('window').width;
-const screenHeight = Dimensions.get('window').height;
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', // Fondo blanco conservado
   },
   // Estilos para selección de rol
   roleSelectionContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'space-between',
     padding: 20,
+    paddingBottom: 40,
+    backgroundColor: '#fff', // Fondo blanco conservado
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: screenHeight * 0.1,
+    marginTop: height * 0.05,
   },
   appTitle: {
     fontSize: 32,
@@ -304,6 +312,7 @@ const styles = StyleSheet.create({
   createAccountButton: {
     alignItems: 'center',
     padding: 16,
+    marginBottom: 20,
   },
   createAccountText: {
     color: '#0A7EA4',
@@ -313,10 +322,13 @@ const styles = StyleSheet.create({
   // Estilos para formulario de login
   loginContainer: {
     flex: 1,
+    backgroundColor: '#fff', // Fondo blanco conservado
   },
   loginContent: {
     flexGrow: 1,
     padding: 20,
+    paddingBottom: 40,
+    backgroundColor: '#fff', // Fondo blanco conservado
   },
   header: {
     flexDirection: 'row',
@@ -408,10 +420,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 32,
     padding: 16,
+    marginBottom: 20,
   },
   createAccountLinkText: {
     color: '#0A7EA4',
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+});

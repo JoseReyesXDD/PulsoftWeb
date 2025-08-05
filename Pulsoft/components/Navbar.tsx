@@ -19,7 +19,7 @@ export function Navbar() {
       </View>
       
       <View style={styles.rightSection}>
-        <TouchableOpacity onPress={() => window.location.href = '/login/'} style={styles.iconButton}>
+        <TouchableOpacity onPress={() => window.location.href = '/z/'} style={styles.iconButton}>
           <IconSymbol name="person.fill" size={22} color="#111" />
           <ThemedText style={styles.iconLabel}>Perfil</ThemedText>
         </TouchableOpacity>

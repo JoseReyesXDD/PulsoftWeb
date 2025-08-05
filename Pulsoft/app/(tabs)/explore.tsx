@@ -2,8 +2,8 @@ import React from 'react';
 import { ScrollView, View, Dimensions, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import { getDatabase, ref, onValue } from 'firebase/database';
+import { getAuth } from 'firebase/auth';
 import { firebaseApp } from '../../firebaseConfig.js';
-import { BarChart } from 'react-native-chart-kit';
 import Svg, { Circle, Text as SvgText, Path, G } from 'react-native-svg';
 
 import { ThemedText } from '@/components/ThemedText';
@@ -70,10 +70,101 @@ interface RadarChartProps {
   size?: number;
 }
 
+// Componente para Polar Area Chart de Sudor
+interface PolarAreaChartSudorProps {
+  sudor: number;    // Valor de sudor
+  size?: number;    // Tamaño
+}
+
+const PolarAreaChartSudor = ({ sudor, size = 300 }: PolarAreaChartSudorProps) => {
+  // Calcular el centro del gráfico
+  const center = size / 2;
+  // Calcular el radio máximo (dejando 40px de margen)
+  const maxRadius = (size - 40) / 2;
+  const maxValue = 200; // Valor máximo para sudoracion
+  
+  // Función para crear los sectores para la grafica de sudor
+  const createPolarSectors = () => {
+    const sectors = []; // Array para almacenar todos los sectores
+    const numSectors = 8;
+    const angleStep = (2 * Math.PI) / numSectors;
+    // Calcular el radio basado en el valor de sudor (proporcional al máximo)
+    const radius = (sudor / maxValue) * maxRadius;
+    
+    // Crear cada sector
+    for (let i = 0; i < numSectors; i++) {
+      // Calcular ángulos de inicio y fin del sector
+      const startAngle = i * angleStep - Math.PI / 2;
+      const endAngle = (i + 1) * angleStep - Math.PI / 2;
+      
+      // Calcular coordenadas de los puntos del sector
+      // Punto inicial del arco
+      const x1 = center + radius * Math.cos(startAngle);
+      const y1 = center + radius * Math.sin(startAngle);
+      // Punto final del arco
+      const x2 = center + radius * Math.cos(endAngle);
+      const y2 = center + radius * Math.sin(endAngle);
+      
+      const largeArcFlag = angleStep > Math.PI ? 1 : 0;
+      
+      // Crear el path SVG del sector
+      // M: mover al centro, L: línea al punto inicial, A: arco al punto final, Z: cerrar
+      const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+      
+      // Agregar el sector al array
+      sectors.push(
+        <Path
+          key={`sector-${i}`}
+          d={pathData}
+          fill="#969CA4"       
+          stroke="#FFFFFF"      
+          strokeWidth={0}      
+          opacity={0.3}        
+        />
+      );
+    }
+    
+    return sectors;
+  };
+
+  return (
+    <Svg width={size} height={size}>
+      
+      {/* Sectores polares - se renderizan encima de los círculos */}
+      {createPolarSectors()}
+      
+      {/* Texto central - valor numérico */}
+      <SvgText
+        x={center}             
+        y={center + 8}          // Ligeramente abajo del centro
+        fontSize="24"          
+        fontWeight="bold"       
+        textAnchor="middle"     // Centrar el texto
+        fill="#2C3E50"       
+        fontFamily="Lufga-Bold" 
+      >
+        {sudor}                 {/* Mostrar el valor de sudor */}
+      </SvgText>
+      
+      {/* Texto central - etiqueta */}
+      <SvgText
+        x={center}            
+        y={center + 30}         // Debajo del valor
+        fontSize="14"         
+        textAnchor="middle"   
+        fill="#2C3E50"         
+        fontFamily="Lufga-Regular"
+      >
+        Sudor                   {/* Etiqueta descriptiva */}
+      </SvgText>
+    </Svg>
+  );
+};
+
 const RadarChart = ({ cardiovascular, size = 300 }: RadarChartProps) => {
   const center = size / 2;
   const maxRadius = (size - 40) / 2;
-  const maxValue = 4000; // Valor máximo para cardiovascular
+  const maxValue = 100; // Valor máximo para cardiovascular
   
   // Crear puntos del radar (10 puntos para formar un círculo suave)
   const createRadarPoints = () => {
@@ -201,20 +292,41 @@ export default function TabTwoScreen() {
   const [cardio, setCardio] = useState(0);
   const [sudor, setSudor] = useState(0);
   const [temp, setTemp] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState('');
   const screenWidth = Math.max(Dimensions.get('window').width - 32, 320);
   const chartWidth = Math.floor((screenWidth - 32) / 3);
   const barChartWidth = Math.max(chartWidth, 120);
 
   useEffect(() => {
+    const auth = getAuth(firebaseApp);
+    const user = auth.currentUser;
+    
+    if (!user) {
+      console.log('No hay usuario autenticado');
+      setLoading(false);
+      return;
+    }
+
+    console.log('Usuario autenticado:', user.uid);
+    setUserEmail(user.email || 'Usuario');
+
     const db = getDatabase(firebaseApp);
-    const patientId = '3hA6DBfpb1OzxRw0IGtEWGDvzHG3';
-    const patientRef = ref(db, `patients/${patientId}`);
-    onValue(patientRef, (snapshot) => {
+    const patientRef = ref(db, `patients/${user.uid}`);
+    
+    const unsubscribe = onValue(patientRef, (snapshot) => {
       const data = snapshot.val() || {};
+      console.log('Datos del paciente:', data);
       setCardio(data.cardiovascular || 0);
       setSudor(data.sudor || 0);
       setTemp(data.temperatura || 0);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error cargando datos del paciente:', error);
+      setLoading(false);
     });
+
+    return () => unsubscribe();
   }, []);
 
   const chartConfig = {
@@ -234,51 +346,28 @@ export default function TabTwoScreen() {
     barPercentage: 4,
   };
 
-  const chartConfigSudor = {
-    backgroundGradientFrom: "#fff",
-    backgroundGradientTo: "#fff",
-    color: (opacity = 1) => `rgba(44, 62, 80, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(44, 62, 80, ${opacity})`,
-    style: { 
-      borderRadius: 16,
-      fontFamily: 'Lufga-Regular',
-    },
-    propsForDots: { r: "4", strokeWidth: "2", stroke: "#2C3E50" },
-    propsForBackgroundLines: {
-      stroke: "#e3e3e3",
-      strokeDasharray: "4"
-    },
-    barPercentage: 4,
-  };
 
-  const dataSudor = {
-    labels: ['Sudor', ''],
-    datasets: [{ data: [sudor, 100] }]
-  };
 
-  // Forzar el rango de 0 a 100 en las gráficas
-  const chartProps = {
-    fromZero: true,
-    yAxisInterval: 10,
-    segments: 10, // 0, 10, 20, ..., 100
-    yLabelsOffset: 10,
-    verticalLabelRotation: 0,
-    withInnerLines: true,
-    showBarTops: true,
-    maxValue: 100,
-    formatYLabel: (yValue: string) => `${Number(yValue)}%`,
-    barPercentage: 1,
-  };
+  if (loading) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <ThemedText>Cargando datos del paciente...</ThemedText>
+      </ThemedView>
+    );
+  }
 
   return (
     <ScrollView style={{ flex: 1 }}>
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Gráficas Biométricas</ThemedText>
+        {userEmail && (
+          <ThemedText style={styles.userEmail}>Paciente: {userEmail}</ThemedText>
+        )}
       </ThemedView>
     
       <View style={styles.rowCharts}>
         <View style={styles.chartContainerSmall}>
-          <ThemedText style={styles.chartTitle}>ECG</ThemedText>
+          <ThemedText style={styles.chartTitle}>ECG Sensor de Ritmo Cardíaco</ThemedText>
           <ThemedText style={styles.sensorValue}>Cardiovascular: {cardio}</ThemedText>
           <View style={styles.polarContainer}>
             <RadarChart 
@@ -288,24 +377,17 @@ export default function TabTwoScreen() {
           </View>
         </View>
         <View style={styles.chartContainerSmall}>
-          <ThemedText style={styles.chartTitle}>GSR</ThemedText>
+          <ThemedText style={styles.chartTitle}>GSR Sensor de Sudoración</ThemedText>
           <ThemedText style={styles.sensorValue}>Sudor: {sudor}</ThemedText>
-          <BarChart
-            data={dataSudor}
-            width={barChartWidth}
-            height={540}
-            yAxisLabel=""
-            yAxisSuffix=""
-            chartConfig={chartConfigSudor}
-            style={StyleSheet.flatten([styles.chart, { alignSelf: 'center' }])}
-            fromZero
-            segments={10}
-            yLabelsOffset={10}
-            verticalLabelRotation={0}
-          />
+          <View style={styles.pieContainer}>
+            <PolarAreaChartSudor 
+              sudor={sudor}
+              size={300}
+            />
+          </View>
         </View>
         <View style={styles.chartContainerSmall}>
-          <ThemedText style={styles.chartTitle}>Temperatura</ThemedText>
+          <ThemedText style={styles.chartTitle}>Sensor de Temperatura Periférica</ThemedText>
           <ThemedText style={styles.sensorValue}>Temperatura: {temp}°C</ThemedText>
           <View style={styles.doughnutContainer}>
             <DoughnutChart 
@@ -344,7 +426,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   chartContainerSmall: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F4F5F6',
     borderRadius: 12,
     padding: 8,
     marginHorizontal: 4,
@@ -367,18 +449,35 @@ const styles = StyleSheet.create({
   chart: {
     marginVertical: 8,
     borderRadius: 16,
-    height: 445,
+    height: 440,
   },
   polarContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 8,
-    height: 445,
+    height: 440,
   },
   doughnutContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 8,
-    height: 445,
+    height: 440,
+  },
+  pieContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+    height: 440,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+    fontFamily: 'Lufga-Regular',
   },
 });

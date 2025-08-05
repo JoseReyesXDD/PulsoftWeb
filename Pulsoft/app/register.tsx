@@ -2,40 +2,130 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getDatabase, ref, set } from 'firebase/database';
+import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
 export default function RegisterScreen() {
   const [role, setRole] = useState<string | null>(null);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const auth = getAuth(firebaseApp);
 
   const handleRegister = async () => {
     if (!role) {
       Alert.alert('Error', 'Selecciona un tipo de cuenta');
       return;
     }
-    if (!username || !password) {
+    if (!email || !password) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
     }
+    if (password.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const usersJson = await AsyncStorage.getItem('users');
-      const users = usersJson ? JSON.parse(usersJson) : [];
-      const exists = users.some((u: any) => u.username === username && u.role === role);
-      if (exists) {
-        Alert.alert('Error', 'El usuario ya existe para este tipo de cuenta');
-        return;
+      console.log('Iniciando registro con:', { email, role });
+      
+      // Crear usuario en Firebase Auth
+      console.log('Intentando crear usuario en Firebase Auth...');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('Usuario creado en Auth exitosamente:', user.uid);
+
+      // Guardar información adicional en Realtime Database
+      console.log('Iniciando guardado en Realtime Database...');
+      const db = getDatabase(firebaseApp);
+      
+      // Guardar información básica primero
+      console.log('Guardando datos básicos del usuario');
+      try {
+        await set(ref(db, `users/${user.uid}`), {
+          email: email,
+          role: role,
+          createdAt: new Date().toISOString()
+        });
+        console.log('Datos básicos guardados');
+      } catch (dbError) {
+        console.error('Error guardando datos básicos:', dbError);
+        throw new Error('Error al guardar datos del usuario');
       }
-      users.push({ username, password, role });
-      await AsyncStorage.setItem('users', JSON.stringify(users));
-      Alert.alert('¡Registro exitoso!', `Bienvenido, ${username} (${role})`, [
-        { text: 'Ir al login', onPress: () => router.replace('/login') }
-      ]);
-    } catch (e) {
-      Alert.alert('Error', 'Ocurrió un problema al registrar el usuario');
+
+      if (role === 'Paciente') {
+        console.log('Creando estructura para paciente');
+        try {
+          // Crear estructura para paciente usando la colección patients existente
+          await set(ref(db, `patients/${user.uid}`), {
+            alert: false,
+            bpm: 79.54679,
+            cardiovascular: 82.93399,
+            panicMode: false,
+            sudor: 50,
+            temperatura: 29.3125
+          });
+          console.log('Datos de paciente guardados en colección patients');
+        } catch (dbError) {
+          console.error('Error guardando datos de paciente:', dbError);
+          throw new Error('Error al guardar datos del paciente');
+        }
+      } else if (role === 'Cuidador') {
+        console.log('Creando estructura para cuidador');
+        try {
+          // Crear estructura para cuidador
+          await set(ref(db, `caregivers/${user.uid}`), {
+            linkedPatients: [],
+            createdAt: new Date().toISOString()
+          });
+          console.log('Datos de cuidador guardados');
+        } catch (dbError) {
+          console.error('Error guardando datos de cuidador:', dbError);
+          throw new Error('Error al guardar datos del cuidador');
+        }
+      }
+
+              Alert.alert('¡Registro exitoso!', `Bienvenido, ${email} (${role})`, [
+          { 
+            text: 'Continuar', 
+            onPress: () => {
+              if (role === 'Paciente') {
+                router.replace('/patient-dashboard');
+              } else if (role === 'Cuidador') {
+                router.replace('/caregiver-dashboard');
+              }
+            }
+          }
+        ]);
+    } catch (error: any) {
+      console.error('Error completo:', error);
+      console.error('Código de error:', error.code);
+      console.error('Mensaje de error:', error.message);
+      
+      let errorMessage = 'Ocurrió un problema al registrar el usuario';
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este email ya está registrado';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Email inválido';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'La contraseña debe tener al menos 6 caracteres';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Error de conexión. Verifica tu internet';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Demasiados intentos. Intenta más tarde';
+      } else {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -116,14 +206,15 @@ export default function RegisterScreen() {
           </ThemedText>
           
           <View style={styles.inputContainer}>
-            <ThemedText style={styles.inputLabel}>Nombre de usuario</ThemedText>
+            <ThemedText style={styles.inputLabel}>Email</ThemedText>
             <View style={styles.textInputContainer}>
-              <MaterialCommunityIcons name="account-outline" size={20} color="#666" />
+              <MaterialCommunityIcons name="email-outline" size={20} color="#666" />
               <TextInput
                 style={styles.textInput}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="Ingresa tu nombre de usuario"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Ingresa tu email"
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -149,19 +240,19 @@ export default function RegisterScreen() {
           <TouchableOpacity 
             style={[
               styles.registerButton,
-              (!role || !username || !password) && styles.disabledButton
+              (!role || !email || !password || loading) && styles.disabledButton
             ]}
             onPress={handleRegister}
-            disabled={!role || !username || !password}
+            disabled={!role || !email || !password || loading}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons 
-              name="account-plus" 
+              name={loading ? "loading" : "account-plus"} 
               size={20} 
               color="white" 
             />
             <ThemedText style={styles.registerButtonText}>
-              Crear Cuenta
+              {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
             </ThemedText>
           </TouchableOpacity>
         </View>
