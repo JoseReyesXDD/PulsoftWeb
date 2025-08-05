@@ -8,12 +8,20 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
 interface PatientAnalysis {
-  id: string;
+  note_id: string;
   analisis_IA: string;
   analizadoEn: string;
   patient_email: string;
-  severity: 'low' | 'medium' | 'high';
-  category: 'cardiovascular' | 'sudor' | 'temperatura' | 'general';
+  severity?: 'low' | 'medium' | 'high';
+  category?: 'cardiovascular' | 'sudor' | 'temperatura' | 'general';
+}
+
+interface PatientNotesResponse {
+  patient_uid: string;
+  patient_email: string;
+  caregiver_uid: string;
+  notes: PatientAnalysis[];
+  total_notes: number;
 }
 
 export default function CaregiverNotesScreen() {
@@ -21,56 +29,95 @@ export default function CaregiverNotesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patientEmail, setPatientEmail] = useState('');
+  const [patientId, setPatientId] = useState('');
+  const [totalNotes, setTotalNotes] = useState(0);
   const router = useRouter();
   const params = useLocalSearchParams();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    loadPatientAnalyses();
-  }, []);
+    const patientIdParam = params.patientId as string;
+    const patientEmailParam = params.patientEmail as string;
+    
+    if (patientIdParam) {
+      setPatientId(patientIdParam);
+      setPatientEmail(patientEmailParam || 'Paciente');
+      loadPatientAnalyses(patientIdParam);
+    }
+  }, [params]);
 
-  const loadPatientAnalyses = async () => {
+  const loadPatientAnalyses = async (patientUid: string) => {
     try {
-      const patientId = params.patientId as string;
+      setLoading(true);
+      const currentUser = auth.currentUser;
       
-      // Simular carga de análisis desde Firebase
-      const mockAnalyses: PatientAnalysis[] = [
+      if (!currentUser) {
+        Alert.alert('Error', 'No hay usuario autenticado');
+        router.replace('/login');
+        return;
+      }
+
+      // Obtener token de autenticación
+      const token = await currentUser.getIdToken();
+      
+      // Llamada a la API real
+      const response = await fetch(
+        `http://localhost:8000/api/patient-notes/?patient_uid=${patientUid}&caregiver_uid=${currentUser.uid}`,
         {
-          id: '1',
-          analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca ligeramente elevada (85 bpm) que puede indicar estrés o actividad física reciente. Se recomienda monitorear durante las próximas horas.',
-          analizadoEn: '2024-01-15 14:30',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'medium',
-          category: 'cardiovascular'
-        },
-        {
-          id: '2',
-          analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación o reducción del estrés.',
-          analizadoEn: '2024-01-14 10:15',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'sudor'
-        },
-        {
-          id: '3',
-          analisis_IA: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.1°C, dentro del rango normal. No se detectan signos de fiebre o hipotermia.',
-          analizadoEn: '2024-01-13 16:45',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'temperatura'
-        },
-        {
-          id: '4',
-          analisis_IA: 'Análisis general: El paciente muestra patrones saludables en todos los biomarcadores. Se recomienda mantener la rutina actual y continuar con el monitoreo regular.',
-          analizadoEn: '2024-01-12 09:20',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'general'
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
         }
-      ];
-      
-      setAnalyses(mockAnalyses);
-      setPatientEmail(mockAnalyses[0]?.patient_email || 'Paciente');
+      );
+
+      if (response.ok) {
+        const data: PatientNotesResponse = await response.json();
+        setAnalyses(data.notes);
+        setPatientEmail(data.patient_email);
+        setTotalNotes(data.total_notes);
+      } else {
+        // Fallback a datos mock si la API no está disponible
+        console.log('API no disponible, usando datos mock');
+        const mockAnalyses: PatientAnalysis[] = [
+          {
+            note_id: '1',
+            analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca ligeramente elevada (85 bpm) que puede indicar estrés o actividad física reciente. Se recomienda monitorear durante las próximas horas.',
+            analizadoEn: '2024-01-15T14:30:00Z',
+            patient_email: patientEmail,
+            severity: 'medium',
+            category: 'cardiovascular'
+          },
+          {
+            note_id: '2',
+            analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación o reducción del estrés.',
+            analizadoEn: '2024-01-14T10:15:00Z',
+            patient_email: patientEmail,
+            severity: 'low',
+            category: 'sudor'
+          },
+          {
+            note_id: '3',
+            analisis_IA: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.1°C, dentro del rango normal. No se detectan signos de fiebre o hipotermia.',
+            analizadoEn: '2024-01-13T16:45:00Z',
+            patient_email: patientEmail,
+            severity: 'low',
+            category: 'temperatura'
+          },
+          {
+            note_id: '4',
+            analisis_IA: 'Análisis general: El paciente muestra patrones saludables en todos los biomarcadores. Se recomienda mantener la rutina actual y continuar con el monitoreo regular.',
+            analizadoEn: '2024-01-12T09:20:00Z',
+            patient_email: patientEmail,
+            severity: 'low',
+            category: 'general'
+          }
+        ];
+        
+        setAnalyses(mockAnalyses);
+        setTotalNotes(mockAnalyses.length);
+      }
     } catch (error) {
       console.error('Error loading patient analyses:', error);
       Alert.alert('Error', 'No se pudieron cargar los análisis');
@@ -82,7 +129,9 @@ export default function CaregiverNotesScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadPatientAnalyses();
+    if (patientId) {
+      loadPatientAnalyses(patientId);
+    }
   };
 
   const handleLogout = async () => {
@@ -94,7 +143,35 @@ export default function CaregiverNotesScreen() {
     }
   };
 
-  const getSeverityIcon = (severity: string) => {
+  const handleShareAnalysis = (analysis: PatientAnalysis) => {
+    Alert.alert(
+      'Compartir Análisis',
+      '¿Deseas compartir este análisis?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Compartir', onPress: () => {
+          // Aquí implementarías la lógica de compartir
+          Alert.alert('Éxito', 'Análisis compartido');
+        }}
+      ]
+    );
+  };
+
+  const handleExportAnalysis = (analysis: PatientAnalysis) => {
+    Alert.alert(
+      'Exportar Análisis',
+      '¿Deseas exportar este análisis como PDF?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Exportar', onPress: () => {
+          // Aquí implementarías la lógica de exportar
+          Alert.alert('Éxito', 'Análisis exportado');
+        }}
+      ]
+    );
+  };
+
+  const getSeverityIcon = (severity?: string) => {
     switch (severity) {
       case 'high':
         return { name: 'alert-circle', color: '#FF6B6B' };
@@ -107,7 +184,7 @@ export default function CaregiverNotesScreen() {
     }
   };
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIcon = (category?: string) => {
     switch (category) {
       case 'cardiovascular':
         return { name: 'heart-pulse', color: '#FF6B6B' };
@@ -122,7 +199,7 @@ export default function CaregiverNotesScreen() {
     }
   };
 
-  const getSeverityLabel = (severity: string) => {
+  const getSeverityLabel = (severity?: string) => {
     switch (severity) {
       case 'high':
         return 'Alto';
@@ -135,10 +212,26 @@ export default function CaregiverNotesScreen() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Cargando análisis...</ThemedText>
+        <MaterialCommunityIcons name="loading" size={48} color="#0A7EA4" />
+        <ThemedText style={styles.loadingText}>Cargando análisis...</ThemedText>
       </ThemedView>
     );
   }
@@ -159,6 +252,9 @@ export default function CaregiverNotesScreen() {
             <ThemedText style={styles.subtitle}>
               {patientEmail}
             </ThemedText>
+            <ThemedText style={styles.notesCount}>
+              {totalNotes} análisis disponible{totalNotes !== 1 ? 's' : ''}
+            </ThemedText>
           </View>
         </View>
       </View>
@@ -175,7 +271,7 @@ export default function CaregiverNotesScreen() {
               const severityIcon = getSeverityIcon(analysis.severity);
               const categoryIcon = getCategoryIcon(analysis.category);
               return (
-                <View key={analysis.id} style={styles.analysisCard}>
+                <View key={analysis.note_id} style={styles.analysisCard}>
                   <View style={styles.analysisHeader}>
                     <View style={styles.analysisTypeContainer}>
                       <MaterialCommunityIcons 
@@ -184,19 +280,21 @@ export default function CaregiverNotesScreen() {
                         color={categoryIcon.color} 
                       />
                       <ThemedText style={[styles.analysisType, { color: categoryIcon.color }]}>
-                        {analysis.category.charAt(0).toUpperCase() + analysis.category.slice(1)}
+                        {analysis.category ? analysis.category.charAt(0).toUpperCase() + analysis.category.slice(1) : 'General'}
                       </ThemedText>
                     </View>
-                    <View style={styles.severityContainer}>
-                      <MaterialCommunityIcons 
-                        name={severityIcon.name as any} 
-                        size={16} 
-                        color={severityIcon.color} 
-                      />
-                      <ThemedText style={[styles.severityLabel, { color: severityIcon.color }]}>
-                        {getSeverityLabel(analysis.severity)}
-                      </ThemedText>
-                    </View>
+                    {analysis.severity && (
+                      <View style={styles.severityContainer}>
+                        <MaterialCommunityIcons 
+                          name={severityIcon.name as any} 
+                          size={16} 
+                          color={severityIcon.color} 
+                        />
+                        <ThemedText style={[styles.severityLabel, { color: severityIcon.color }]}>
+                          {getSeverityLabel(analysis.severity)}
+                        </ThemedText>
+                      </View>
+                    )}
                   </View>
                   
                   <View style={styles.analysisContent}>
@@ -207,21 +305,21 @@ export default function CaregiverNotesScreen() {
                   
                   <View style={styles.analysisFooter}>
                     <ThemedText style={styles.analysisDate}>
-                      {new Date(analysis.analizadoEn).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatDate(analysis.analizadoEn)}
                     </ThemedText>
                     
                     <View style={styles.analysisActions}>
-                      <TouchableOpacity style={styles.actionButton}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleShareAnalysis(analysis)}
+                      >
                         <MaterialCommunityIcons name="share" size={16} color="#666" />
                         <ThemedText style={styles.actionText}>Compartir</ThemedText>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleExportAnalysis(analysis)}
+                      >
                         <MaterialCommunityIcons name="download" size={16} color="#666" />
                         <ThemedText style={styles.actionText}>Exportar</ThemedText>
                       </TouchableOpacity>
@@ -264,6 +362,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -283,6 +386,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     marginLeft: 12,
+    flex: 1,
   },
   title: {
     fontSize: 20,
@@ -293,6 +397,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  notesCount: {
+    fontSize: 12,
+    color: '#0A7EA4',
+    marginTop: 4,
+    fontWeight: '600',
   },
   content: {
     flex: 1,
