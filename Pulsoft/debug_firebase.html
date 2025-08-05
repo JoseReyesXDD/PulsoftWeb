@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -36,6 +36,12 @@
         button:hover {
             background: #085a7a;
         }
+        button.success {
+            background: #4CAF50;
+        }
+        button.warning {
+            background: #FF9800;
+        }
         input, textarea {
             width: 100%;
             padding: 8px;
@@ -56,6 +62,15 @@
         .success { color: green; }
         .error { color: red; }
         .info { color: blue; }
+        .warning { color: orange; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
     </style>
 </head>
 <body>
@@ -95,13 +110,54 @@ const firebaseConfig = {
 
         <div class="section">
             <h3>4. Escribir Datos de Ejemplo</h3>
-            <input type="text" id="writePatientUid" placeholder="UID del paciente para escribir datos" />
-            <button onclick="writeSampleData()">Escribir Datos de Ejemplo</button>
+            <div class="grid">
+                <div>
+                    <input type="text" id="writePatientUid" placeholder="UID del paciente para escribir datos" />
+                    <button onclick="writeSampleData()">Escribir Datos Básicos</button>
+                </div>
+                <div>
+                    <input type="text" id="writePatientUidNotes" placeholder="UID del paciente para notas" />
+                    <button onclick="writeSampleDataWithNotes()" class="success">Escribir Datos + Notas</button>
+                </div>
+            </div>
             <div id="writeLog" class="log"></div>
         </div>
 
         <div class="section">
-            <h3>5. Logs</h3>
+            <h3>5. Vincular Pacientes a Cuidador</h3>
+            <div class="grid">
+                <div>
+                    <input type="text" id="caregiverUid" placeholder="UID del cuidador" />
+                    <input type="text" id="patientUid1" placeholder="UID del paciente 1" />
+                    <input type="text" id="patientUid2" placeholder="UID del paciente 2" />
+                    <button onclick="linkPatientsToCaregiver()" class="warning">Vincular Pacientes</button>
+                </div>
+                <div>
+                    <input type="text" id="readCaregiverUid" placeholder="UID del cuidador para leer" />
+                    <button onclick="readCaregiverData()">Leer Datos del Cuidador</button>
+                </div>
+            </div>
+            <div id="caregiverLog" class="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>6. Poblar Base de Datos Completa</h3>
+            <p>Esta función creará 2 pacientes con notas y los vinculará a un cuidador:</p>
+            <div class="grid">
+                <div>
+                    <input type="text" id="populatePatient1" placeholder="UID del paciente 1" />
+                    <input type="text" id="populatePatient2" placeholder="UID del paciente 2" />
+                </div>
+                <div>
+                    <input type="text" id="populateCaregiver" placeholder="UID del cuidador" />
+                    <button onclick="populateCompleteDatabase()" class="success">Poblar Base Completa</button>
+                </div>
+            </div>
+            <div id="populateLog" class="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>7. Logs</h3>
             <button onclick="clearLogs()">Limpiar Logs</button>
             <div id="logs" class="log"></div>
         </div>
@@ -220,13 +276,272 @@ const firebaseConfig = {
                 const patientRef = ref(db, `patients/${patientUid}`);
                 await set(patientRef, sampleData);
                 
-                log('Datos de ejemplo escritos correctamente', 'success');
+                log('Datos básicos escritos correctamente', 'success');
                 document.getElementById('writeLog').innerHTML = `
-                    <div class="success">Datos escritos:</div>
+                    <div class="success">Datos básicos escritos:</div>
                     <pre>${JSON.stringify(sampleData, null, 2)}</pre>
                 `;
             } catch (error) {
                 log('Error escribiendo datos: ' + error.message, 'error');
+            }
+        };
+
+        window.writeSampleDataWithNotes = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const patientUid = document.getElementById('writePatientUidNotes').value;
+            if (!patientUid) {
+                log('Por favor ingresa un UID de paciente', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                
+                // Datos del paciente
+                const patientData = {
+                    email: 'paciente@ejemplo.com',
+                    cardiovascular: Math.floor(Math.random() * 100) + 60,
+                    sudor: Math.floor(Math.random() * 100),
+                    temperatura: (36.5 + Math.random() * 1.5).toFixed(1),
+                    lastUpdate: new Date().toISOString()
+                };
+                
+                // Notas de ejemplo
+                const notes = [
+                    {
+                        analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca de 75 bpm, dentro del rango normal. El paciente muestra patrones cardíacos estables.',
+                        analizadoEn: new Date().toISOString(),
+                        severity: 'low',
+                        category: 'cardiovascular'
+                    },
+                    {
+                        analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación.',
+                        analizadoEn: new Date(Date.now() - 86400000).toISOString(),
+                        severity: 'low',
+                        category: 'sudor'
+                    },
+                    {
+                        analisis_IA: 'Análisis de temperatura: La temperatura se mantiene estable en 37.2°C, dentro del rango normal. No se detectan signos de fiebre.',
+                        analizadoEn: new Date(Date.now() - 172800000).toISOString(),
+                        severity: 'low',
+                        category: 'temperatura'
+                    }
+                ];
+                
+                // Escribir datos del paciente
+                const patientRef = ref(db, `patients/${patientUid}`);
+                await set(patientRef, patientData);
+                
+                // Escribir notas
+                for (let i = 0; i < notes.length; i++) {
+                    const noteRef = ref(db, `patients/${patientUid}/analyses/analysis_${i + 1}`);
+                    await set(noteRef, notes[i]);
+                }
+                
+                log('Datos y notas escritos correctamente', 'success');
+                document.getElementById('writeLog').innerHTML = `
+                    <div class="success">Datos del paciente y ${notes.length} notas escritos:</div>
+                    <div><strong>Datos del paciente:</strong></div>
+                    <pre>${JSON.stringify(patientData, null, 2)}</pre>
+                    <div><strong>Notas creadas:</strong></div>
+                    <pre>${JSON.stringify(notes, null, 2)}</pre>
+                `;
+            } catch (error) {
+                log('Error escribiendo datos y notas: ' + error.message, 'error');
+            }
+        };
+
+        window.linkPatientsToCaregiver = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const caregiverUid = document.getElementById('caregiverUid').value;
+            const patientUid1 = document.getElementById('patientUid1').value;
+            const patientUid2 = document.getElementById('patientUid2').value;
+            
+            if (!caregiverUid || !patientUid1 || !patientUid2) {
+                log('Por favor ingresa todos los UIDs requeridos', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                
+                const caregiverData = {
+                    email: 'cuidador@ejemplo.com',
+                    name: 'Dr. Carlos Rodríguez',
+                    linkedPatients: {
+                        [patientUid1]: true,
+                        [patientUid2]: true
+                    }
+                };
+                
+                const caregiverRef = ref(db, `caregivers/${caregiverUid}`);
+                await set(caregiverRef, caregiverData);
+                
+                log('Pacientes vinculados al cuidador correctamente', 'success');
+                document.getElementById('caregiverLog').innerHTML = `
+                    <div class="success">Cuidador creado con pacientes vinculados:</div>
+                    <pre>${JSON.stringify(caregiverData, null, 2)}</pre>
+                `;
+            } catch (error) {
+                log('Error vinculando pacientes: ' + error.message, 'error');
+            }
+        };
+
+        window.readCaregiverData = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const caregiverUid = document.getElementById('readCaregiverUid').value;
+            if (!caregiverUid) {
+                log('Por favor ingresa un UID de cuidador', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                const caregiverRef = ref(db, `caregivers/${caregiverUid}`);
+                const snapshot = await get(caregiverRef);
+                
+                const caregiverLogDiv = document.getElementById('caregiverLog');
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    caregiverLogDiv.innerHTML = `
+                        <div class="success">Datos del cuidador encontrados:</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    log('Datos del cuidador leídos correctamente', 'success');
+                } else {
+                    caregiverLogDiv.innerHTML = '<div class="error">No se encontraron datos para este cuidador</div>';
+                    log('No se encontraron datos del cuidador', 'error');
+                }
+            } catch (error) {
+                log('Error leyendo datos del cuidador: ' + error.message, 'error');
+            }
+        };
+
+        window.populateCompleteDatabase = async function() {
+            if (!db) {
+                log('Firebase no está inicializado', 'error');
+                return;
+            }
+            
+            const patient1Uid = document.getElementById('populatePatient1').value;
+            const patient2Uid = document.getElementById('populatePatient2').value;
+            const caregiverUid = document.getElementById('populateCaregiver').value;
+            
+            if (!patient1Uid || !patient2Uid || !caregiverUid) {
+                log('Por favor ingresa todos los UIDs requeridos', 'error');
+                return;
+            }
+            
+            try {
+                const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                
+                log('Iniciando población completa de la base de datos...', 'info');
+                
+                // Datos de los pacientes
+                const patientsData = {
+                    [patient1Uid]: {
+                        email: 'maria.garcia@ejemplo.com',
+                        cardiovascular: 75,
+                        sudor: 45,
+                        temperatura: 37.2,
+                        lastUpdate: new Date().toISOString()
+                    },
+                    [patient2Uid]: {
+                        email: 'juan.lopez@ejemplo.com',
+                        cardiovascular: 82,
+                        sudor: 38,
+                        temperatura: 36.8,
+                        lastUpdate: new Date().toISOString()
+                    }
+                };
+                
+                // Notas para cada paciente
+                const patient1Notes = [
+                    {
+                        analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca de 75 bpm, dentro del rango normal. El paciente muestra patrones cardíacos estables sin anomalías detectables.',
+                        analizadoEn: new Date().toISOString(),
+                        severity: 'low',
+                        category: 'cardiovascular'
+                    },
+                    {
+                        analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación.',
+                        analizadoEn: new Date(Date.now() - 86400000).toISOString(),
+                        severity: 'low',
+                        category: 'sudor'
+                    }
+                ];
+                
+                const patient2Notes = [
+                    {
+                        analisis_IA: 'Análisis de ritmo cardíaco: Frecuencia cardíaca ligeramente elevada (82 bpm) que puede indicar estrés o actividad física reciente.',
+                        analizadoEn: new Date().toISOString(),
+                        severity: 'medium',
+                        category: 'cardiovascular'
+                    },
+                    {
+                        analisis_IA: 'Análisis de temperatura: Temperatura corporal de 36.8°C, ligeramente por debajo del promedio pero dentro del rango normal.',
+                        analizadoEn: new Date(Date.now() - 86400000).toISOString(),
+                        severity: 'low',
+                        category: 'temperatura'
+                    }
+                ];
+                
+                // Escribir datos de pacientes
+                for (const [patientId, data] of Object.entries(patientsData)) {
+                    await set(ref(db, `patients/${patientId}`), data);
+                    log(`Datos escritos para paciente: ${patientId}`, 'success');
+                }
+                
+                // Escribir notas para paciente 1
+                for (let i = 0; i < patient1Notes.length; i++) {
+                    await set(ref(db, `patients/${patient1Uid}/analyses/analysis_${i + 1}`), patient1Notes[i]);
+                }
+                log(`Notas escritas para paciente 1: ${patient1Notes.length}`, 'success');
+                
+                // Escribir notas para paciente 2
+                for (let i = 0; i < patient2Notes.length; i++) {
+                    await set(ref(db, `patients/${patient2Uid}/analyses/analysis_${i + 1}`), patient2Notes[i]);
+                }
+                log(`Notas escritas para paciente 2: ${patient2Notes.length}`, 'success');
+                
+                // Escribir datos del cuidador
+                const caregiverData = {
+                    email: 'dr.rodriguez@ejemplo.com',
+                    name: 'Dr. Carlos Rodríguez',
+                    linkedPatients: {
+                        [patient1Uid]: true,
+                        [patient2Uid]: true
+                    }
+                };
+                
+                await set(ref(db, `caregivers/${caregiverUid}`), caregiverData);
+                log('Cuidador creado con pacientes vinculados', 'success');
+                
+                document.getElementById('populateLog').innerHTML = `
+                    <div class="success">¡Base de datos poblada completamente!</div>
+                    <div><strong>Pacientes creados:</strong></div>
+                    <pre>${JSON.stringify(patientsData, null, 2)}</pre>
+                    <div><strong>Cuidador creado:</strong></div>
+                    <pre>${JSON.stringify(caregiverData, null, 2)}</pre>
+                    <div><strong>Total de notas:</strong> ${patient1Notes.length + patient2Notes.length}</div>
+                `;
+                
+                log('Población completa finalizada exitosamente', 'success');
+            } catch (error) {
+                log('Error en población completa: ' + error.message, 'error');
             }
         };
 
