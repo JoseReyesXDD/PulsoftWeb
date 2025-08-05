@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mostrar UID del Cuidador - Pulsoft</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .uid-display {
+            background: #f8f9fa;
+            border: 2px solid #0A7EA4;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .uid-label {
+            font-weight: bold;
+            color: #0A7EA4;
+            margin-bottom: 10px;
+        }
+        .uid-value {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        button {
+            background: #0A7EA4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #085a7a;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Mostrar UID del Cuidador</h1>
+        
+        <div class="info">
+            <strong>Instrucciones:</strong>
+            <ol>
+                <li>Asegúrate de estar logueado como cuidador en tu app</li>
+                <li>Haz clic en "Obtener UID del Cuidador"</li>
+                <li>Copia el UID que aparece abajo</li>
+            </ol>
+        </div>
+
+        <button onclick="getCaregiverUID()">Obtener UID del Cuidador</button>
+        <button onclick="copyUID()">Copiar UID</button>
+        <button onclick="clearDisplay()">Limpiar</button>
+
+        <div id="uidDisplay" class="uid-display" style="display: none;">
+            <div class="uid-label">UID del Cuidador:</div>
+            <div id="uidValue" class="uid-value"></div>
+        </div>
+
+        <div id="message"></div>
+    </div>
+
+    <script type="module">
+        let currentUID = null;
+
+        // Función para obtener el UID del cuidador
+        window.getCaregiverUID = async function() {
+            try {
+                // Intentar obtener Firebase desde la app
+                const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+                
+                // Configuración de Firebase de Pulsoft
+                const firebaseConfig = {
+                    apiKey: "AIzaSyDQEWZhaViw-7LT-VLs4XdCXcFg25DmrqQ",
+                    authDomain: "pulsoft-fc676.firebaseapp.com",
+                    databaseURL: "https://pulsoft-fc676-default-rtdb.firebaseio.com",
+                    projectId: "pulsoft-fc676",
+                    storageBucket: "pulsoft-fc676.appspot.com",
+                    messagingSenderId: "758196176997",
+                    appId: "1:758196176997:web:f8f023b9c03fca2e489e8c",
+                    measurementId: "G-K6XJ908EXP"
+                };
+
+                // Inicializar Firebase
+                const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+
+                // Verificar si hay usuario autenticado
+                const user = auth.currentUser;
+                
+                if (user) {
+                    currentUID = user.uid;
+                    const uidDisplay = document.getElementById('uidDisplay');
+                    const uidValue = document.getElementById('uidValue');
+                    
+                    uidValue.textContent = currentUID;
+                    uidDisplay.style.display = 'block';
+                    
+                    showMessage('✅ UID obtenido exitosamente', 'success');
+                    console.log('UID del cuidador:', currentUID);
+                    console.log('Email del cuidador:', user.email);
+                } else {
+                    showMessage('❌ No hay usuario autenticado. Por favor, inicia sesión como cuidador en tu app.', 'error');
+                }
+
+            } catch (error) {
+                console.error('Error obteniendo UID:', error);
+                showMessage('❌ Error: ' + error.message, 'error');
+            }
+        };
+
+        // Función para copiar UID al portapapeles
+        window.copyUID = function() {
+            if (currentUID) {
+                navigator.clipboard.writeText(currentUID).then(() => {
+                    showMessage('📋 UID copiado al portapapeles', 'success');
+                }).catch(() => {
+                    showMessage('❌ No se pudo copiar al portapapeles', 'error');
+                });
+            } else {
+                showMessage('❌ No hay UID para copiar', 'error');
+            }
+        };
+
+        // Función para limpiar la pantalla
+        window.clearDisplay = function() {
+            document.getElementById('uidDisplay').style.display = 'none';
+            document.getElementById('message').innerHTML = '';
+            currentUID = null;
+        };
+
+        // Función para mostrar mensajes
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+        }
+
+        // Función para obtener UID desde la consola (alternativa)
+        window.getUIDFromConsole = function() {
+            console.log('🔍 Para obtener el UID desde la consola de tu app:');
+            console.log('');
+            console.log('1. Abre tu app en el navegador');
+            console.log('2. Inicia sesión como cuidador');
+            console.log('3. Abre la consola (F12)');
+            console.log('4. Ejecuta este comando:');
+            console.log('');
+            console.log('console.log("UID:", auth.currentUser?.uid);');
+            console.log('console.log("Email:", auth.currentUser?.email);');
+            console.log('');
+            console.log('O si tienes Firebase Auth importado:');
+            console.log('import { getAuth } from "firebase/auth";');
+            console.log('const auth = getAuth();');
+            console.log('console.log("UID:", auth.currentUser?.uid);');
+        };
+
+        // Mostrar instrucciones iniciales
+        console.log('✅ Página cargada. Usa:');
+        console.log('- getCaregiverUID() para obtener el UID');
+        console.log('- getUIDFromConsole() para ver instrucciones de consola');
+    </script>
+</body>
+</html>

@@ -79,6 +79,7 @@ export default function RootLayout() {
           <Stack.Screen name="search" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="profile" />
+          <Stack.Screen name="patient-charts" />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="dark" />
