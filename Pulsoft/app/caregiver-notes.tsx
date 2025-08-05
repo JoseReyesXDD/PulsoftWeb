@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getAuth, signOut } from 'firebase/auth';
+import { getAuth, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getDatabase, ref, onValue, get, off } from 'firebase/database';
 import { firebaseApp } from '../firebaseConfig';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -14,6 +15,7 @@ interface PatientAnalysis {
   patient_email: string;
   severity: 'low' | 'medium' | 'high';
   category: 'cardiovascular' | 'sudor' | 'temperatura' | 'general';
+  patientId?: string;
 }
 
 export default function CaregiverNotesScreen() {
@@ -21,60 +23,117 @@ export default function CaregiverNotesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patientEmail, setPatientEmail] = useState('');
+  const [error, setError] = useState<string>('');
+  const [authStatus, setAuthStatus] = useState<string>('checking');
   const router = useRouter();
   const params = useLocalSearchParams();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    loadPatientAnalyses();
+    // Verificar estado de autenticación
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ Cuidador autenticado:', user.uid);
+        setAuthStatus('authenticated');
+        loadPatientAnalyses();
+      } else {
+        console.log('❌ No hay cuidador autenticado');
+        setAuthStatus('unauthenticated');
+        setLoading(false);
+        setError('No hay usuario autenticado');
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
   }, []);
 
   const loadPatientAnalyses = async () => {
     try {
+      console.log('🔄 Cargando análisis del paciente...');
+      setError('');
+      
       const patientId = params.patientId as string;
       
-      // Simular carga de análisis desde Firebase
-      const mockAnalyses: PatientAnalysis[] = [
-        {
-          id: '1',
-          analisis_IA: 'Análisis de ritmo cardíaco: Se detecta una frecuencia cardíaca ligeramente elevada (85 bpm) que puede indicar estrés o actividad física reciente. Se recomienda monitorear durante las próximas horas.',
-          analizadoEn: '2024-01-15 14:30',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'medium',
-          category: 'cardiovascular'
-        },
-        {
-          id: '2',
-          analisis_IA: 'Análisis de sudoración: Los niveles de GSR muestran una disminución del 15% comparado con el promedio semanal. Esto puede indicar mejor hidratación o reducción del estrés.',
-          analizadoEn: '2024-01-14 10:15',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'sudor'
-        },
-        {
-          id: '3',
-          analisis_IA: 'Análisis de temperatura: La temperatura corporal se mantiene estable en 37.1°C, dentro del rango normal. No se detectan signos de fiebre o hipotermia.',
-          analizadoEn: '2024-01-13 16:45',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'temperatura'
-        },
-        {
-          id: '4',
-          analisis_IA: 'Análisis general: El paciente muestra patrones saludables en todos los biomarcadores. Se recomienda mantener la rutina actual y continuar con el monitoreo regular.',
-          analizadoEn: '2024-01-12 09:20',
-          patient_email: 'paciente1@ejemplo.com',
-          severity: 'low',
-          category: 'general'
-        }
-      ];
+      if (!patientId) {
+        console.error('❌ No se proporcionó ID del paciente');
+        setError('No se pudo identificar al paciente');
+        setLoading(false);
+        return;
+      }
+
+      console.log('📍 ID del paciente:', patientId);
       
-      setAnalyses(mockAnalyses);
-      setPatientEmail(mockAnalyses[0]?.patient_email || 'Paciente');
+      const db = getDatabase(firebaseApp);
+      
+      // Obtener datos del paciente para el email
+      const patientRef = ref(db, `patients/${patientId}`);
+      const patientSnapshot = await get(patientRef);
+      
+      if (patientSnapshot.exists()) {
+        const patientData = patientSnapshot.val();
+        setPatientEmail(patientData.email || `paciente-${patientId}@ejemplo.com`);
+        console.log('✅ Datos del paciente cargados:', patientData.email);
+      } else {
+        setPatientEmail(`paciente-${patientId}@ejemplo.com`);
+        console.log('⚠️ No se encontraron datos del paciente');
+      }
+      
+      // Obtener análisis del paciente desde Firebase
+      const analysesRef = ref(db, `patients/${patientId}/analyses`);
+      
+      const unsubscribe = onValue(analysesRef, (analysesSnapshot) => {
+        console.log('📡 Análisis recibidos de Firebase:', analysesSnapshot.val());
+        
+        if (analysesSnapshot.exists()) {
+          const analysesData = analysesSnapshot.val();
+          const analyses: PatientAnalysis[] = [];
+          
+          // Convertir los datos de Firebase a nuestro formato
+          Object.keys(analysesData).forEach(key => {
+            const analysis = analysesData[key];
+            analyses.push({
+              id: key,
+              analisis_IA: analysis.analisis_IA || 'Análisis no disponible',
+              analizadoEn: analysis.analizadoEn || new Date().toISOString(),
+              patient_email: patientEmail || `paciente-${patientId}@ejemplo.com`,
+              severity: analysis.severity || 'low',
+              category: analysis.category || 'general',
+              patientId: patientId
+            });
+          });
+          
+          // Ordenar por fecha de análisis (más reciente primero)
+          analyses.sort((a, b) => new Date(b.analizadoEn).getTime() - new Date(a.analizadoEn).getTime());
+          
+          console.log('✅ Análisis cargados:', analyses.length);
+          setAnalyses(analyses);
+        } else {
+          console.log('⚠️ No se encontraron análisis para este paciente');
+          setAnalyses([]);
+          setError('No hay análisis disponibles para este paciente. Los análisis aparecerán aquí cuando el sistema los genere.');
+        }
+        
+        setLoading(false);
+        setRefreshing(false);
+      }, (error) => {
+        console.error('❌ Error cargando análisis:', error);
+        setError(`Error cargando análisis: ${error.message}`);
+        setLoading(false);
+        setRefreshing(false);
+      });
+
+      // Limpiar suscripción cuando el componente se desmonte
+      return () => {
+        console.log('🧹 Limpiando suscripción de análisis');
+        off(analysesRef);
+        unsubscribe();
+      };
+      
     } catch (error) {
-      console.error('Error loading patient analyses:', error);
-      Alert.alert('Error', 'No se pudieron cargar los análisis');
-    } finally {
+      console.error('❌ Error en loadPatientAnalyses:', error);
+      setError(`Error inesperado: ${error}`);
       setLoading(false);
       setRefreshing(false);
     }
@@ -82,6 +141,7 @@ export default function CaregiverNotesScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    setError('');
     loadPatientAnalyses();
   };
 
@@ -135,10 +195,29 @@ export default function CaregiverNotesScreen() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Cargando análisis...</ThemedText>
+        <MaterialCommunityIcons name="loading" size={48} color="#0A7EA4" />
+        <ThemedText style={styles.loadingText}>Cargando análisis...</ThemedText>
+        <ThemedText style={styles.statusText}>
+          Auth: {authStatus}
+        </ThemedText>
       </ThemedView>
     );
   }
@@ -159,9 +238,25 @@ export default function CaregiverNotesScreen() {
             <ThemedText style={styles.subtitle}>
               {patientEmail}
             </ThemedText>
+            {params.patientId && (
+              <ThemedText style={styles.patientId}>
+                ID: {params.patientId as string}
+              </ThemedText>
+            )}
           </View>
         </View>
+        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          <MaterialCommunityIcons name="refresh" size={24} color="#0A7EA4" />
+        </TouchableOpacity>
       </View>
+
+      {/* Error Message */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={20} color="#FF6B6B" />
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </View>
+      )}
 
       <ScrollView 
         style={styles.content}
@@ -169,7 +264,17 @@ export default function CaregiverNotesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {analyses.length > 0 ? (
+        {analyses.length === 0 && !error ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="chart-line" size={64} color="#ccc" />
+            <ThemedText style={styles.emptyTitle}>
+              No hay análisis disponibles
+            </ThemedText>
+            <ThemedText style={styles.emptySubtitle}>
+              Este paciente aún no ha registrado datos para su análisis. Los análisis aparecerán aquí cuando el sistema los genere automáticamente.
+            </ThemedText>
+          </View>
+        ) : (
           <View style={styles.analysesContainer}>
             {analyses.map((analysis) => {
               const severityIcon = getSeverityIcon(analysis.severity);
@@ -179,7 +284,7 @@ export default function CaregiverNotesScreen() {
                   <View style={styles.analysisHeader}>
                     <View style={styles.analysisTypeContainer}>
                       <MaterialCommunityIcons 
-                        name={categoryIcon.name as any} 
+                        name={categoryIcon.name} 
                         size={20} 
                         color={categoryIcon.color} 
                       />
@@ -187,13 +292,13 @@ export default function CaregiverNotesScreen() {
                         {analysis.category.charAt(0).toUpperCase() + analysis.category.slice(1)}
                       </ThemedText>
                     </View>
-                    <View style={styles.severityContainer}>
+                    <View style={[styles.severityBadge, { backgroundColor: severityIcon.color }]}>
                       <MaterialCommunityIcons 
-                        name={severityIcon.name as any} 
+                        name={severityIcon.name} 
                         size={16} 
-                        color={severityIcon.color} 
+                        color="white" 
                       />
-                      <ThemedText style={[styles.severityLabel, { color: severityIcon.color }]}>
+                      <ThemedText style={styles.severityLabel}>
                         {getSeverityLabel(analysis.severity)}
                       </ThemedText>
                     </View>
@@ -207,13 +312,7 @@ export default function CaregiverNotesScreen() {
                   
                   <View style={styles.analysisFooter}>
                     <ThemedText style={styles.analysisDate}>
-                      {new Date(analysis.analizadoEn).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatDate(analysis.analizadoEn)}
                     </ThemedText>
                     
                     <View style={styles.analysisActions}>
@@ -230,16 +329,6 @@ export default function CaregiverNotesScreen() {
                 </View>
               );
             })}
-          </View>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="chart-line-off" size={64} color="#ccc" />
-            <ThemedText style={styles.emptyTitle}>
-              No hay análisis disponibles
-            </ThemedText>
-            <ThemedText style={styles.emptySubtitle}>
-              Este paciente aún no ha registrado datos para su análisis
-            </ThemedText>
           </View>
         )}
       </ScrollView>
@@ -263,6 +352,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
+    color: '#666',
+  },
+  statusText: {
+    fontSize: 12,
+    marginTop: 8,
+    color: '#999',
   },
   header: {
     flexDirection: 'row',
@@ -293,6 +392,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  patientId: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B6B',
+  },
+  errorText: {
+    color: '#D32F2F',
+    marginLeft: 8,
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -327,13 +451,17 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     textTransform: 'uppercase',
   },
-  severityContainer: {
+  severityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   severityLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
+    color: 'white',
     marginLeft: 4,
   },
   analysisContent: {
