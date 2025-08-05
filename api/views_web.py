@@ -6,6 +6,10 @@ from firebase_admin import firestore # Importa Firestore
 from api.models import FirebaseUser, CaregiverPatientLink
 import firebase_admin
 from firebase_config import db
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import json
 
 def login_view(request):
     if request.method == 'POST':
@@ -198,3 +202,205 @@ def caregiver_notes_view(request):
         'patient_uid': patient_uid,
         'patient_email': patient_email
     })
+
+@firebase_login_required
+def manage_patient_links(request):
+    """
+    Vista para gestionar los vínculos de pacientes del cuidador.
+    """
+    uid = request.session.get('uid')
+    user_type = request.session.get('user_type')
+
+    if not uid or user_type != 'caregiver':
+        return redirect('login')
+
+    try:
+        caregiver = FirebaseUser.objects.get(uid=uid, user_type='caregiver')
+        
+        # Obtener pacientes vinculados
+        linked_patients = CaregiverPatientLink.objects.filter(caregiver=caregiver).select_related('patient')
+        
+        # Obtener pacientes disponibles para vincular
+        linked_patient_uids = linked_patients.values_list('patient__uid', flat=True)
+        available_patients = FirebaseUser.objects.filter(
+            user_type='patient'
+        ).exclude(uid__in=linked_patient_uids)
+
+        context = {
+            'caregiver': caregiver,
+            'linked_patients': linked_patients,
+            'available_patients': available_patients,
+            'total_linked': linked_patients.count(),
+            'total_available': available_patients.count(),
+        }
+        
+        return render(request, 'manage_patient_links.html', context)
+        
+    except FirebaseUser.DoesNotExist:
+        return redirect('login')
+    except Exception as e:
+        print(f"Error en manage_patient_links: {e}")
+        return render(request, 'manage_patient_links.html', {
+            'error': 'Error al cargar los datos de pacientes'
+        })
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def link_patient_ajax(request):
+    """
+    Endpoint AJAX para vincular un paciente al cuidador.
+    """
+    try:
+        data = json.loads(request.body)
+        caregiver_uid = data.get('caregiver_uid')
+        patient_uid = data.get('patient_uid')
+        
+        if not caregiver_uid or not patient_uid:
+            return JsonResponse({
+                'success': False,
+                'error': 'caregiver_uid y patient_uid son requeridos'
+            }, status=400)
+
+        # Verificar que el cuidador existe
+        try:
+            caregiver = FirebaseUser.objects.get(uid=caregiver_uid, user_type='caregiver')
+        except FirebaseUser.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cuidador no encontrado'
+            }, status=404)
+
+        # Verificar que el paciente existe
+        try:
+            patient = FirebaseUser.objects.get(uid=patient_uid, user_type='patient')
+        except FirebaseUser.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Paciente no encontrado'
+            }, status=404)
+
+        # Verificar que no existe ya el vínculo
+        existing_link = CaregiverPatientLink.objects.filter(
+            caregiver=caregiver,
+            patient=patient
+        ).first()
+        
+        if existing_link:
+            return JsonResponse({
+                'success': False,
+                'error': 'El paciente ya está vinculado a este cuidador'
+            }, status=409)
+
+        # Crear el vínculo
+        link = CaregiverPatientLink.objects.create(
+            caregiver=caregiver,
+            patient=patient
+        )
+
+        # Crear el vínculo en Firestore también
+        try:
+            db.collection('caregiverPatientLinks').add({
+                'caregiverUid': caregiver_uid,
+                'patientUid': patient_uid,
+                'linkedAt': link.linked_at.isoformat(),
+                'caregiverEmail': caregiver.email,
+                'patientEmail': patient.email
+            })
+        except Exception as firestore_error:
+            print(f"Error al crear vínculo en Firestore: {firestore_error}")
+            # Si falla Firestore, eliminar el vínculo de Django
+            link.delete()
+            return JsonResponse({
+                'success': False,
+                'error': 'Error al crear el vínculo en la base de datos'
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Paciente vinculado exitosamente',
+            'link_id': link.id,
+            'linked_at': link.linked_at.isoformat()
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'JSON inválido'
+        }, status=400)
+    except Exception as e:
+        print(f"Error en link_patient_ajax: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def unlink_patient_ajax(request):
+    """
+    Endpoint AJAX para desvincular un paciente del cuidador.
+    """
+    try:
+        data = json.loads(request.body)
+        caregiver_uid = data.get('caregiver_uid')
+        patient_uid = data.get('patient_uid')
+        
+        if not caregiver_uid or not patient_uid:
+            return JsonResponse({
+                'success': False,
+                'error': 'caregiver_uid y patient_uid son requeridos'
+            }, status=400)
+
+        # Verificar que el cuidador existe
+        try:
+            caregiver = FirebaseUser.objects.get(uid=caregiver_uid, user_type='caregiver')
+        except FirebaseUser.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cuidador no encontrado'
+            }, status=404)
+
+        # Verificar que el paciente existe
+        try:
+            patient = FirebaseUser.objects.get(uid=patient_uid, user_type='patient')
+        except FirebaseUser.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Paciente no encontrado'
+            }, status=404)
+
+        # Buscar y eliminar el vínculo
+        try:
+            link = CaregiverPatientLink.objects.get(caregiver=caregiver, patient=patient)
+            link.delete()
+        except CaregiverPatientLink.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'No existe vínculo entre el cuidador y el paciente'
+            }, status=404)
+
+        # Eliminar el vínculo en Firestore también
+        try:
+            query = db.collection('caregiverPatientLinks').where('caregiverUid', '==', caregiver_uid).where('patientUid', '==', patient_uid).stream()
+            for doc in query:
+                doc.reference.delete()
+        except Exception as firestore_error:
+            print(f"Error al eliminar vínculo en Firestore: {firestore_error}")
+            # No fallar si Firestore falla, el vínculo ya se eliminó en Django
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Paciente desvinculado exitosamente'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'JSON inválido'
+        }, status=400)
+    except Exception as e:
+        print(f"Error en unlink_patient_ajax: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }, status=500)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth, signOut } from 'firebase/auth';
@@ -10,40 +10,85 @@ import { ThemedView } from '@/components/ThemedView';
 interface PatientData {
   uid: string;
   email: string;
-  cardiovascular: number;
-  sudor: number;
-  temperatura: number;
-  lastUpdate: string;
+  user_type: string;
+  cardiovascular?: number;
+  sudor?: number;
+  temperatura?: number;
+  lastUpdate?: string;
+  notesCount?: number;
+}
+
+interface CaregiverPatientsResponse {
+  caregiver_uid: string;
+  linked_patients: PatientData[];
+  total_patients: number;
 }
 
 export default function CaregiverDashboardScreen() {
   const [selectedPatient, setSelectedPatient] = useState<PatientData | null>(null);
   const [linkedPatients, setLinkedPatients] = useState<PatientData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const auth = getAuth(firebaseApp);
 
   useEffect(() => {
-    // Simular carga de pacientes vinculados
-    const loadLinkedPatients = async () => {
-      try {
-        // Aquí cargarías los pacientes reales desde Firebase
+    loadLinkedPatients();
+  }, []);
+
+  const loadLinkedPatients = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        Alert.alert('Error', 'No hay usuario autenticado');
+        router.replace('/login');
+        return;
+      }
+
+      // Obtener token de autenticación
+      const token = await currentUser.getIdToken();
+      
+      // Llamada a la API real
+      const response = await fetch(`http://localhost:8000/api/caregiver-patients/?caregiver_uid=${currentUser.uid}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data: CaregiverPatientsResponse = await response.json();
+        setLinkedPatients(data.linked_patients);
+        
+        if (data.linked_patients.length > 0) {
+          setSelectedPatient(data.linked_patients[0]);
+        }
+      } else {
+        // Fallback a datos mock si la API no está disponible
+        console.log('API no disponible, usando datos mock');
         const mockPatients: PatientData[] = [
           {
             uid: '1',
             email: 'paciente1@ejemplo.com',
+            user_type: 'patient',
             cardiovascular: 75,
             sudor: 45,
             temperatura: 37.2,
-            lastUpdate: new Date().toLocaleString()
+            lastUpdate: new Date().toLocaleString(),
+            notesCount: 3
           },
           {
             uid: '2',
             email: 'paciente2@ejemplo.com',
+            user_type: 'patient',
             cardiovascular: 82,
             sudor: 38,
             temperatura: 36.8,
-            lastUpdate: new Date().toLocaleString()
+            lastUpdate: new Date().toLocaleString(),
+            notesCount: 1
           }
         ];
         
@@ -51,15 +96,20 @@ export default function CaregiverDashboardScreen() {
         if (mockPatients.length > 0) {
           setSelectedPatient(mockPatients[0]);
         }
-      } catch (error) {
-        console.error('Error loading linked patients:', error);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error loading linked patients:', error);
+      Alert.alert('Error', 'No se pudieron cargar los pacientes vinculados');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
+  const onRefresh = () => {
+    setRefreshing(true);
     loadLinkedPatients();
-  }, []);
+  };
 
   const handleLogout = async () => {
     try {
@@ -74,7 +124,22 @@ export default function CaregiverDashboardScreen() {
     if (selectedPatient) {
       router.push({
         pathname: '/caregiver-notes',
-        params: { patientId: selectedPatient.uid }
+        params: { 
+          patientId: selectedPatient.uid,
+          patientEmail: selectedPatient.email 
+        }
+      });
+    }
+  };
+
+  const handleViewCharts = () => {
+    if (selectedPatient) {
+      router.push({
+        pathname: '/patient-charts',
+        params: { 
+          patientId: selectedPatient.uid,
+          patientEmail: selectedPatient.email 
+        }
       });
     }
   };
@@ -87,10 +152,19 @@ export default function CaregiverDashboardScreen() {
     router.push('/configuracion-usuario');
   };
 
+  const handleManagePatients = () => {
+    router.push('/manage-patient-links');
+  };
+
+  const handleViewAllPatients = () => {
+    Alert.alert('Información', 'Funcionalidad para ver todos los pacientes en desarrollo');
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Cargando...</ThemedText>
+        <MaterialCommunityIcons name="loading" size={48} color="#0A7EA4" />
+        <ThemedText style={styles.loadingText}>Cargando pacientes...</ThemedText>
       </ThemedView>
     );
   }
@@ -115,12 +189,22 @@ export default function CaregiverDashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Selector de paciente */}
         <View style={styles.patientSelector}>
-          <ThemedText type="title" style={styles.sectionTitle}>
-            Pacientes Vinculados
-          </ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="title" style={styles.sectionTitle}>
+              Pacientes Vinculados ({linkedPatients.length})
+            </ThemedText>
+            <TouchableOpacity onPress={handleViewAllPatients} style={styles.viewAllButton}>
+              <ThemedText style={styles.viewAllText}>Ver todos</ThemedText>
+            </TouchableOpacity>
+          </View>
           
           {linkedPatients.length > 0 ? (
             <View style={styles.patientList}>
@@ -146,9 +230,16 @@ export default function CaregiverDashboardScreen() {
                       ]}>
                         {patient.email}
                       </ThemedText>
-                      <ThemedText style={styles.lastUpdate}>
-                        Última actualización: {patient.lastUpdate}
-                      </ThemedText>
+                      <View style={styles.patientStats}>
+                        <ThemedText style={styles.lastUpdate}>
+                          Última actualización: {patient.lastUpdate || 'No disponible'}
+                        </ThemedText>
+                        {patient.notesCount !== undefined && (
+                          <ThemedText style={styles.notesCount}>
+                            {patient.notesCount} notas
+                          </ThemedText>
+                        )}
+                      </View>
                     </View>
                   </View>
                   {selectedPatient?.uid === patient.uid && (
@@ -163,6 +254,9 @@ export default function CaregiverDashboardScreen() {
               <ThemedText style={styles.noPatientsText}>
                 No se encontraron pacientes vinculados
               </ThemedText>
+              <ThemedText style={styles.noPatientsSubtext}>
+                Los pacientes aparecerán aquí una vez que se vinculen a tu cuenta
+              </ThemedText>
             </View>
           )}
         </View>
@@ -171,37 +265,56 @@ export default function CaregiverDashboardScreen() {
         {selectedPatient && (
           <View style={styles.patientDataContainer}>
             <ThemedText type="title" style={styles.sectionTitle}>
-              Datos del Paciente
+              Datos del Paciente Seleccionado
             </ThemedText>
             
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricCard}>
-                <MaterialCommunityIcons name="heart-pulse" size={32} color="#FF6B6B" />
-                <ThemedText style={styles.metricValue}>{selectedPatient.cardiovascular}</ThemedText>
-                <ThemedText style={styles.metricLabel}>Cardiovascular</ThemedText>
+            <View style={styles.patientSummary}>
+              <View style={styles.patientAvatar}>
+                <MaterialCommunityIcons name="account" size={32} color="#0A7EA4" />
               </View>
-              
-              <View style={styles.metricCard}>
-                <MaterialCommunityIcons name="water" size={32} color="#4BC0C0" />
-                <ThemedText style={styles.metricValue}>{selectedPatient.sudor}</ThemedText>
-                <ThemedText style={styles.metricLabel}>Sudor</ThemedText>
-              </View>
-              
-              <View style={styles.metricCard}>
-                <MaterialCommunityIcons name="thermometer" size={32} color="#FFCD56" />
-                <ThemedText style={styles.metricValue}>{selectedPatient.temperatura}°C</ThemedText>
-                <ThemedText style={styles.metricLabel}>Temperatura</ThemedText>
+              <View style={styles.patientSummaryInfo}>
+                <ThemedText style={styles.patientName}>{selectedPatient.email}</ThemedText>
+                <ThemedText style={styles.patientStatus}>Paciente Activo</ThemedText>
               </View>
             </View>
 
-            {/* Acciones */}
+            {/* Métricas del paciente */}
+            {(selectedPatient.cardiovascular || selectedPatient.sudor || selectedPatient.temperatura) && (
+              <View style={styles.metricsContainer}>
+                {selectedPatient.cardiovascular && (
+                  <View style={styles.metricCard}>
+                    <MaterialCommunityIcons name="heart-pulse" size={32} color="#FF6B6B" />
+                    <ThemedText style={styles.metricValue}>{selectedPatient.cardiovascular}</ThemedText>
+                    <ThemedText style={styles.metricLabel}>Cardiovascular</ThemedText>
+                  </View>
+                )}
+                
+                {selectedPatient.sudor && (
+                  <View style={styles.metricCard}>
+                    <MaterialCommunityIcons name="water" size={32} color="#4BC0C0" />
+                    <ThemedText style={styles.metricValue}>{selectedPatient.sudor}</ThemedText>
+                    <ThemedText style={styles.metricLabel}>Sudor</ThemedText>
+                  </View>
+                )}
+                
+                {selectedPatient.temperatura && (
+                  <View style={styles.metricCard}>
+                    <MaterialCommunityIcons name="thermometer" size={32} color="#FFCD56" />
+                    <ThemedText style={styles.metricValue}>{selectedPatient.temperatura}°C</ThemedText>
+                    <ThemedText style={styles.metricLabel}>Temperatura</ThemedText>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Acciones principales */}
             <View style={styles.actionsContainer}>
               <TouchableOpacity 
                 style={styles.actionButton} 
                 onPress={handleViewAnalysis}
                 disabled={!selectedPatient}
               >
-                <MaterialCommunityIcons name="chart-line" size={24} color="white" />
+                <MaterialCommunityIcons name="file-document" size={24} color="white" />
                 <ThemedText style={styles.actionButtonText}>
                   Ver análisis del paciente
                 </ThemedText>
@@ -209,11 +322,35 @@ export default function CaregiverDashboardScreen() {
 
               <TouchableOpacity 
                 style={[styles.actionButton, styles.secondaryButton]} 
-                onPress={() => router.push('/explore')}
+                onPress={handleViewCharts}
+                disabled={!selectedPatient}
               >
                 <MaterialCommunityIcons name="chart-line" size={24} color="#0A7EA4" />
                 <ThemedText style={[styles.actionButtonText, styles.secondaryButtonText]}>
                   Ver gráficas
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Acciones adicionales */}
+            <View style={styles.additionalActions}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.tertiaryButton]} 
+                onPress={handleManagePatients}
+              >
+                <MaterialCommunityIcons name="account-multiple" size={24} color="#27ae60" />
+                <ThemedText style={[styles.actionButtonText, styles.tertiaryButtonText]}>
+                  Gestionar Pacientes
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.tertiaryButton]} 
+                onPress={() => router.push('/select_patient')}
+              >
+                <MaterialCommunityIcons name="account-switch" size={24} color="#95a5a6" />
+                <ThemedText style={[styles.actionButtonText, styles.tertiaryButtonText]}>
+                  Cambiar Paciente
                 </ThemedText>
               </TouchableOpacity>
             </View>
@@ -240,6 +377,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   header: {
     flexDirection: 'row',
@@ -275,12 +417,25 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
     color: 'white',
     fontFamily: 'Lufga-Bold',
+  },
+  viewAllButton: {
+    padding: 8,
+  },
+  viewAllText: {
+    color: '#0A7EA4',
+    fontSize: 14,
+    fontWeight: '600',
   },
   patientSelector: {
     marginBottom: 30,
@@ -324,10 +479,20 @@ const styles = StyleSheet.create({
   selectedPatientText: {
     color: '#0A7EA4',
   },
+  patientStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   lastUpdate: {
     fontSize: 12,
     color: '#666',
-    marginTop: 2,
+  },
+  notesCount: {
+    fontSize: 12,
+    color: '#0A7EA4',
+    fontWeight: '600',
   },
   noPatientsContainer: {
     alignItems: 'center',
@@ -339,8 +504,49 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
   },
+  noPatientsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   patientDataContainer: {
     marginBottom: 20,
+  },
+  patientSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  patientAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f0f8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  patientSummaryInfo: {
+    flex: 1,
+  },
+  patientName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  patientStatus: {
+    fontSize: 14,
+    color: '#0A7EA4',
+    marginTop: 2,
   },
   metricsContainer: {
     flexDirection: 'row',
@@ -373,7 +579,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actionsContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
   },
   actionButton: {
     flexDirection: 'row',
@@ -402,6 +608,19 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#0A7EA4',
+  },
+  additionalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tertiaryButton: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#27ae60',
+  },
+  tertiaryButtonText: {
+    color: '#27ae60',
   },
   footer: {
     padding: 20,
